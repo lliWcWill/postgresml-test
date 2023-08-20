@@ -6,6 +6,7 @@ from rich.progress import track
 from rich import print
 import os
 from dotenv import load_dotenv
+load_dotenv()
 import glob
 import argparse
 from time import time
@@ -89,8 +90,8 @@ splitter_params = os.environ.get(
     "SPLITTER_PARAMS", {"chunk_size": 1500, "chunk_overlap": 40}
 )
 model = os.environ.get("MODEL", "intfloat/e5-small")
-model_params = ast.literal_eval(os.environ.get("MODEL_PARAMS", {}))
-query_params = ast.literal_eval(os.environ.get("QUERY_PARAMS", {}))
+model_params = ast.literal_eval(os.environ.get("MODEL_PARAMS", '{}'))
+qquery_params = ast.literal_eval(os.environ.get("QUERY_PARAMS", '{}'))
 system_prompt = os.environ.get("SYSTEM_PROMPT")
 base_prompt = os.environ.get("BASE_PROMPT")
 openai_api_key = os.environ.get("OPENAI_API_KEY")
