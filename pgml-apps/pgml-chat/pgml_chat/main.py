@@ -91,7 +91,7 @@ splitter_params = os.environ.get(
 )
 model = os.environ.get("MODEL", "intfloat/e5-small")
 model_params = ast.literal_eval(os.environ.get("MODEL_PARAMS", '{}'))
-qquery_params = ast.literal_eval(os.environ.get("QUERY_PARAMS", '{}'))
+query_params = ast.literal_eval(os.environ.get("QUERY_PARAMS", '{}'))
 system_prompt = os.environ.get("SYSTEM_PROMPT")
 base_prompt = os.environ.get("BASE_PROMPT")
 openai_api_key = os.environ.get("OPENAI_API_KEY")
@@ -206,11 +206,12 @@ async def generate_response(
     messages, openai_api_key, temperature=0.7, max_tokens=256, top_p=0.9
 ):
     openai.api_key = openai_api_key
+    print("Messages Sent to OpenAI:", messages)
     response = openai.ChatCompletion.create(
-        model="gpt-3.5-turbo",
+        model="gpt-4-0314",
         messages=messages,
-        temperature=temperature,
-        max_tokens=max_tokens,
+        temperature=0.4,
+        max_tokens=300,
         top_p=top_p,
         frequency_penalty=0,
         presence_penalty=0,
@@ -257,11 +258,11 @@ async def get_prompt(user_input: str = ""):
         top_k=2,
         query_params=query_params,
     )
-    log.info(vector_results)
+    #print("Vector Search Results:", vector_results)
     context = ""
 
     for result in vector_results:
-        context += result[1] + "\n"
+        context += result[1] + "\\n"
 
     query = base_prompt.format(context=context, question=user_input)
 
