@@ -7,19 +7,21 @@ from rich import print
 import os
 from dotenv import load_dotenv
 load_dotenv()
+SYSTEM_PROMPT = os.environ.get("SYSTEM_PROMPT")
+BASE_PROMPT = os.getenv("BASE_PROMPT")
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 import glob
 import argparse
 from time import time
 import openai
 import signal
+import readline
 
 import ast
 from slack_bolt.async_app import AsyncApp
 from slack_bolt.adapter.socket_mode.aiohttp import AsyncSocketModeHandler
 import requests
-
 import discord
-
 
 def handler(signum, frame):
     print("Exiting...")
@@ -250,41 +252,56 @@ async def get_prompt(user_input: str = ""):
     collection = await db.create_or_get_collection(collection_name)
     model_id = await collection.register_model("embedding", model, model_params)
     splitter_id = await collection.register_text_splitter(splitter, splitter_params)
-    log.info("Model id: " + str(model_id) + " Splitter id: " + str(splitter_id))
-    vector_results = await collection.vector_search(
-        user_input,
-        model_id=model_id,
-        splitter_id=splitter_id,
-        top_k=2,
-        query_params=query_params,
-    )
-    #print("Vector Search Results:", vector_results)
-    context = ""
+    
+    log.info(f"Model id: {model_id} | Splitter id: {splitter_id}")
 
-    for result in vector_results:
-        context += result[1] + "\\n"
+    # Dynamic top_k
+    context = ""
+    top_k = 1
+    max_context_length = 6000  # For example, you might want to adjust this value
+    while len(context) < max_context_length and top_k < 7:  # Limit top_k to avoid excessive database calls
+        vector_results = await collection.vector_search(
+            user_input,
+            model_id=model_id,
+            splitter_id=splitter_id,
+            top_k=top_k,
+            query_params=query_params,
+        )
+        context = "".join([result[1] + "\\n" for result in vector_results])
+        top_k += 1
+
+    # Placeholder for refining vector search
+    # TODO: Adjust embeddings, model, or other parameters as needed to improve relevance
+
+    # Enhanced Logging
+    log.info(f"Context length: {len(context)} | Records fetched: {top_k - 1}")
 
     query = base_prompt.format(context=context, question=user_input)
-
     return query
 
 
 async def chat_cli():
-    user_input = "Who are you?"
+    print("Welcome to IT Solutions Bot! How can I assist you today?")
     while True:
         try:
-            messages = [{"role": "system", "content": system_prompt}]
-            if user_input:
-                query = await get_prompt(user_input)
-            messages.append({"role": "user", "content": query})
-            response = await generate_response(
-                messages, openai_api_key, max_tokens=512, temperature=0.0
-            )
-            print("PgBot: " + response)
-
             user_input = input("User (Ctrl-C to exit): ")
+
+            # This will fetch relevant data from your database based on user input.
+            context_from_db = await get_prompt(user_input)
+
+            # Construct the message to be sent to OpenAI.
+            messages = [
+                {"role": "system", "content": "I'm IT Solutions Bot, here to assist with technical queries. Please provide context for accurate answers."},
+                {"role": "user", "content": context_from_db + "\n\nQuestion: " + user_input}
+            ]
+
+            # Generate response from OpenAI.
+            response = await generate_response(messages, OPENAI_API_KEY, max_tokens=512, temperature=1.0)
+
+            print(f"PgBot: {response}")
+
         except KeyboardInterrupt:
-            print("Exiting...")
+            print("\nExiting chat...")
             break
 
 
@@ -375,3 +392,4 @@ def main():
         client.run(os.environ["DISCORD_BOT_TOKEN"])
     else:
         asyncio.run(run())
+        
