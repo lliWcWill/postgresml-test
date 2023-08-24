@@ -6,22 +6,201 @@ from rich.progress import track
 from rich import print
 import os
 from dotenv import load_dotenv
+from tiktoken import encoding_for_model
+import openai
+
+# Load environment variables
 load_dotenv()
 SYSTEM_PROMPT = os.environ.get("SYSTEM_PROMPT")
 BASE_PROMPT = os.getenv("BASE_PROMPT")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+
+# Other imports
 import glob
 import argparse
 from time import time
-import openai
 import signal
 import readline
-
+from halo import Halo
 import ast
 from slack_bolt.async_app import AsyncApp
 from slack_bolt.adapter.socket_mode.aiohttp import AsyncSocketModeHandler
 import requests
 import discord
+from discord.ext import commands
+import logging
+
+logging.basicConfig(level=logging.DEBUG)
+
+# Initialize the tokenizer and encoder for GPT-4
+enc = encoding_for_model("gpt-4")
+
+INITIAL_TOKEN_LIMIT = 8000
+MAX_RESPONSE_TOKENS = 7000
+
+
+def count_message_tokens(messages):
+    """Counts the number of tokens in a list of messages."""
+    return sum([len(enc.encode(message["content"])) for message in messages])
+
+
+async def generate_response(messages, openai_api_key, temperature=0.1):
+    """Generates a response using OpenAI and ensures token limits are respected."""
+
+    # Count the tokens of the initial messages
+    initial_tokens = count_message_tokens(messages)
+    print(f"Initial tokens: {initial_tokens}")
+
+    # Identify and trim or remove the most verbose message if tokens exceed the limit
+    while initial_tokens > INITIAL_TOKEN_LIMIT:
+        most_verbose_message = max(messages, key=lambda x: count_message_tokens([x]))
+        messages.remove(most_verbose_message)
+        initial_tokens = count_message_tokens(messages)
+        print(
+            "Note: Your request is extensive, and some older messages were trimmed to process it. Please provide more specific details or break your request into smaller parts if needed."
+        )
+
+    # Calculate available tokens for the completion
+    allowed_completion_tokens = 8192 - initial_tokens
+    completion_tokens = min(MAX_RESPONSE_TOKENS, allowed_completion_tokens)
+    print(f"Available tokens for completion: {completion_tokens}")
+
+    try:
+        openai.api_key = openai_api_key
+        response = openai.ChatCompletion.create(
+            model="gpt-4-0314",
+            messages=messages,
+            temperature=temperature,
+            max_tokens=completion_tokens,
+            top_p=0.4,
+            frequency_penalty=0,
+            presence_penalty=0,
+        )
+    except Exception as e:
+        print(f"Error while calling OpenAI API: {e}")
+        return (
+            "An error occurred while processing your request. Please try again later."
+        )
+
+    # Add OpenAI's response to the messages list
+    messages.append(
+        {"role": "ai", "content": response["choices"][0]["message"]["content"]}
+    )
+
+    # Count the tokens after adding OpenAI's response
+    total_tokens_after_response = count_message_tokens(messages)
+    print(
+        f"Total tokens after including OpenAI's response: {total_tokens_after_response}"
+    )
+
+    # Check if the total tokens after the response exceed the max limit of 8192
+    if total_tokens_after_response > 8192:
+        print(
+            f"Total tokens {total_tokens_after_response} exceed the model's maximum context length of 8192. Cancelling query."
+        )
+        return (
+            "Token limit exceeded after including OpenAI's response. Query cancelled."
+        )
+
+    return response["choices"][0]["message"]["content"]
+
+
+def trim_text_to_fit_token_limit(text, max_tokens=8100):
+    """
+    Trim the text to fit within the token limit.
+    """
+    token_count = count_message_tokens(
+        [{"content": text}]
+    )  # Adjusted to match function's expected input structure
+    while token_count > max_tokens:
+        # Reduce text length by a percentage and check tokens again
+        text = text[: int(len(text) * 0.95)]
+        token_count = count_message_tokens([{"content": text}])
+    return text
+
+
+# Define the intents
+intents = discord.Intents.default()
+intents.messages = True
+intents.reactions = True
+intents.guilds = True
+
+# Initialize the bot with the defined intents and a command prefix (e.g., '!')
+bot = commands.Bot(command_prefix="!", intents=intents)
+
+
+@bot.command(name="kb_help")
+async def _kb_help(ctx):
+    help_embed = discord.Embed(
+        title="Bot Helper", description="List of available commands:", color=0x42F2F5
+    )
+    help_embed.add_field(
+        name="!kb_help", value="Displays this help message.", inline=False
+    )
+    help_embed.add_field(
+        name="!feedback",
+        value="Provide feedback on the bot's performance.",
+        inline=False,
+    )
+    await ctx.send(embed=help_embed)
+
+
+# System prompt placeholder
+system_prompt = "How can I assist you today?"
+
+# Load OpenAI API key from an environment variable or secret management service
+openai_api_key = os.environ.get("OPENAI_API_KEY")
+
+
+@bot.event
+async def on_ready():
+    print(f"We have logged in as {bot.user}")
+    await bot.change_presence(activity=discord.Game(name="Mention me with a question!"))
+
+
+@bot.command(name="feedback")
+async def feedback(ctx, *, feedback_message: str):
+    # Log feedback for further analysis and improvements
+    print(f"Feedback from {ctx.author}: {feedback_message}")
+    await ctx.send("Thank you for your feedback!")
+
+
+@bot.event
+async def on_message(message):
+    if message.author.bot:
+        return
+
+    bot_mention = f"<@{bot.user.id}>"
+
+    if bot_mention in message.content:
+        print("Processing user request...")
+        user_input = message.content.replace(bot_mention, "").strip()
+        query = await get_prompt(user_input)
+
+        try:
+            response = await generate_response(
+                [{"role": "user", "content": query}], openai_api_key, temperature=0.2
+            )
+            await message.channel.send(response)
+        except Exception as e:
+            await message.channel.send(
+                "Sorry, I encountered an error. Please try again later."
+            )
+
+    # This line is necessary for processing commands
+    await bot.process_commands(message)
+
+
+# Placeholder function for getting the prompt from user input (you'd replace this with your actual function)
+async def get_prompt(user_input):
+    return user_input
+
+
+# Your existing generate_response function and other utility functions go here
+
+# Run the bot
+bot.run(os.environ.get("DISCORD_BOT_TOKEN"))
+
 
 def handler(signum, frame):
     print("Exiting...")
@@ -92,8 +271,11 @@ splitter_params = os.environ.get(
     "SPLITTER_PARAMS", {"chunk_size": 1500, "chunk_overlap": 40}
 )
 model = os.environ.get("MODEL", "intfloat/e5-small")
+# fmt: off
 model_params = ast.literal_eval(os.environ.get("MODEL_PARAMS", '{}'))
 query_params = ast.literal_eval(os.environ.get("QUERY_PARAMS", '{}'))
+# fmt: on
+
 system_prompt = os.environ.get("SYSTEM_PROMPT")
 base_prompt = os.environ.get("BASE_PROMPT")
 openai_api_key = os.environ.get("OPENAI_API_KEY")
@@ -204,23 +386,6 @@ async def generate_embeddings(
     return 0
 
 
-async def generate_response(
-    messages, openai_api_key, temperature=0.7, max_tokens=256, top_p=0.9
-):
-    openai.api_key = openai_api_key
-    print("Messages Sent to OpenAI:", messages)
-    response = openai.ChatCompletion.create(
-        model="gpt-4-0314",
-        messages=messages,
-        temperature=0.4,
-        max_tokens=300,
-        top_p=top_p,
-        frequency_penalty=0,
-        presence_penalty=0,
-    )
-    return response["choices"][0]["message"]["content"]
-
-
 async def ingest_documents(
     db: Database,
     collection_name: str,
@@ -252,14 +417,16 @@ async def get_prompt(user_input: str = ""):
     collection = await db.create_or_get_collection(collection_name)
     model_id = await collection.register_model("embedding", model, model_params)
     splitter_id = await collection.register_text_splitter(splitter, splitter_params)
-    
+
     log.info(f"Model id: {model_id} | Splitter id: {splitter_id}")
 
     # Dynamic top_k
     context = ""
     top_k = 1
-    max_context_length = 6000  # For example, you might want to adjust this value
-    while len(context) < max_context_length and top_k < 7:  # Limit top_k to avoid excessive database calls
+    max_context_length = 8100  # For example, you might want to adjust this value
+    while (
+        len(context) < max_context_length and top_k < 7
+    ):  # Limit top_k to avoid excessive database calls
         vector_results = await collection.vector_search(
             user_input,
             model_id=model_id,
@@ -289,16 +456,26 @@ async def chat_cli():
             # This will fetch relevant data from your database based on user input.
             context_from_db = await get_prompt(user_input)
 
-            # Construct the message to be sent to OpenAI.
-            messages = [
-                {"role": "system", "content": "I'm IT Solutions Bot, here to assist with technical queries. Please provide context for accurate answers."},
-                {"role": "user", "content": context_from_db + "\n\nQuestion: " + user_input}
-            ]
+            # Start the spinner before making the request.
+            with Halo(text="Processing...", spinner="dots"):
+                # Construct the message to be sent to OpenAI.
+                messages = [
+                    {
+                        "role": "system",
+                        "content": "You are consulting the IT Solutions Expert Bot, fine-tuned with a vast knowledge base. This bot is tailored to deliver precise answers for IT-related queries. Accuracy and relevancy are paramount. Ensure you consider the provided context for the best response.",
+                    },
+                    {
+                        "role": "user",
+                        "content": context_from_db + "\n\nQuestion: " + user_input,
+                    },
+                ]
 
             # Generate response from OpenAI.
-            response = await generate_response(messages, OPENAI_API_KEY, max_tokens=512, temperature=1.0)
+            response = await generate_response(
+                messages, OPENAI_API_KEY, temperature=0.002
+            )
 
-            print(f"PgBot: {response}")
+            print(f"ITS Assistant: {response}")
 
         except KeyboardInterrupt:
             print("\nExiting chat...")
@@ -323,7 +500,7 @@ async def chat_slack():
             query = await get_prompt(user_input)
             messages.append({"role": "user", "content": query})
             response = await generate_response(
-                messages, openai_api_key, max_tokens=512, temperature=1.0
+                messages, openai_api_key, max_tokens=8100, temperature=1.0
             )
             user = message["user"]
 
@@ -335,30 +512,6 @@ async def chat_slack():
         log.error(
             "SLACK_BOT_TOKEN and SLACK_APP_TOKEN environment variables are not found. Exiting..."
         )
-
-
-intents = discord.Intents.default()
-intents.message_content = True
-client = discord.Client(intents=intents)
-
-@client.event
-async def on_ready():
-    print(f"We have logged in as {client.user}")
-
-@client.event
-async def on_message(message):
-    bot_mention = f"<@{client.user.id}>"
-    messages = [{"role": "system", "content": system_prompt}]
-    if message.author != client.user and bot_mention in message.content:
-        print("Discord response in progress ..")
-        user_input = message.content
-        query = await get_prompt(user_input)
-
-        messages.append({"role": "user", "content": query})
-        response = await generate_response(
-            messages, openai_api_key, max_tokens=512, temperature=1.0
-        )
-        await message.channel.send(response)
 
 
 async def run():
@@ -388,8 +541,11 @@ async def run():
 
 
 def main():
-    if stage == "chat" and chat_interface == "discord" and os.environ.get("DISCORD_BOT_TOKEN"):
+    if (
+        stage == "chat"
+        and chat_interface == "discord"
+        and os.environ.get("DISCORD_BOT_TOKEN")
+    ):
         client.run(os.environ["DISCORD_BOT_TOKEN"])
     else:
         asyncio.run(run())
-        
