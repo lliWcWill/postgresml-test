@@ -1,12 +1,15 @@
 use std::env::var;
 
 use crate::templates::components::{StaticNav, StaticNavLink};
+use once_cell::sync::OnceCell;
 use rocket::http::Status;
 use rocket::request::{self, FromRequest, Request};
 use sqlx::{postgres::PgPoolOptions, Executor, PgPool};
 
+static POOL: OnceCell<PgPool> = OnceCell::new();
+
 use crate::models;
-use crate::{ClustersSettings, Context};
+use crate::Context;
 
 pub fn default_database_url() -> String {
     match var("DATABASE_URL") {
@@ -23,31 +26,29 @@ pub struct Cluster {
 
 impl Default for Cluster {
     fn default() -> Self {
-        let max_connections = 1;
-        let min_connections = 1;
-        let idle_timeout = 0;
+        // Needed for query cancellation
+        let max_connections = 2;
 
-        let settings = ClustersSettings {
-            max_connections,
-            idle_timeout,
-            min_connections,
-        };
+        let min_connections = 1;
 
         Cluster {
             pool: Some(
-                PgPoolOptions::new()
-                    .max_connections(settings.max_connections)
-                    .idle_timeout(std::time::Duration::from_millis(settings.idle_timeout))
-                    .min_connections(settings.min_connections)
-                    .after_connect(|conn, _meta| {
-                        Box::pin(async move {
-                            conn.execute("SET application_name = 'pgml_dashboard';")
-                                .await?;
-                            Ok(())
+                POOL.get_or_init(|| {
+                    PgPoolOptions::new()
+                        .max_connections(max_connections)
+                        .idle_timeout(None)
+                        .min_connections(min_connections)
+                        .after_connect(|conn, _meta| {
+                            Box::pin(async move {
+                                conn.execute("SET application_name = 'pgml_dashboard';")
+                                    .await?;
+                                Ok(())
+                            })
                         })
-                    })
-                    .connect_lazy(&default_database_url())
-                    .expect("Default database URL is alformed"),
+                        .connect_lazy(&default_database_url())
+                        .expect("Default database URL is alformed")
+                })
+                .clone(),
             ),
             context: Context {
                 user: models::User::default(),
@@ -60,11 +61,33 @@ impl Default for Cluster {
                 },
                 account_management_nav: StaticNav::default(),
                 upper_left_nav: StaticNav {
-                    links: vec![StaticNavLink::new(
-                        "Dashboard".to_string(),
-                        "/dashboard".to_string(),
-                    )
-                    .icon("thumbnail_bar")],
+                    links: vec![
+                        StaticNavLink::new(
+                            "Notebooks".to_string(),
+                            "/dashboard?tab=Notebooks".to_string(),
+                        )
+                        .icon("thumbnail_bar"),
+                        StaticNavLink::new(
+                            "Projects".to_string(),
+                            "/dashboard?tab=Projects".to_string(),
+                        )
+                        .icon("thumbnail_bar"),
+                        StaticNavLink::new(
+                            "Models".to_string(),
+                            "/dashboard?tab=Models".to_string(),
+                        )
+                        .icon("thumbnail_bar"),
+                        StaticNavLink::new(
+                            "Snapshots".to_string(),
+                            "/dashboard?tab=Snapshots".to_string(),
+                        )
+                        .icon("thumbnail_bar"),
+                        StaticNavLink::new(
+                            "Upload data".to_string(),
+                            "/dashboard?tab=Upload_Data".to_string(),
+                        )
+                        .icon("thumbnail_bar"),
+                    ],
                 },
                 lower_left_nav: StaticNav::default(),
             },

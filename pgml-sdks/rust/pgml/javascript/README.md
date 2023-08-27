@@ -1,36 +1,30 @@
 # Open Source Alternative for Building End-to-End Vector Search Applications without OpenAI & Pinecone
 
-## Table of Contents
+# Table of Contents
 
 - [Overview](#overview)
 - [Quickstart](#quickstart)
 - [Usage](#usage)
-  - [Create or Get a Collection](#create-or-get-a-collection)
-  - [Upsert Documents](#upsert-documents)
-  - [Generate Chunks](#generate-chunks)
-  - [Generate Embeddings](#generate-embeddings)
-  - [Vector Search](#vector-search)
-  - [Register Model](#register-model)
-  - [Register Text Splitter](#register-text-splitter)
+- [Examples](./examples/README.md)
 - [Developer setup](#developer-setup)
 - [API Reference](#api-reference)
 - [Roadmap](#roadmap)
 
-## Overview
+# Overview
 
-The pgml SDK is designed to facilitate the development of scalable vector search applications on PostgreSQL databases. With this SDK, you can seamlessly manage various database tables related to documents, text chunks, text splitters, LLM (Language Model) models, and embeddings. By leveraging the SDK's capabilities, you can efficiently index LLM embeddings using PgVector for fast and accurate queries.
+JavaScript SDK is designed to facilitate the development of scalable vector search applications on PostgreSQL databases. With this SDK, you can seamlessly manage various database tables related to documents, text chunks, text splitters, LLM (Language Model) models, and embeddings. By leveraging the SDK's capabilities, you can efficiently index LLM embeddings using PgVector for fast and accurate queries.
 
-### Key Features
+## Key Features
 
 - **Automated Database Management**: With the SDK, you can easily handle the management of database tables related to documents, text chunks, text splitters, LLM models, and embeddings. This automated management system simplifies the process of setting up and maintaining your vector search application's data structure.
 
-- **Embedding Generation from Open Source Models**: The Javascript SDK provides the ability to generate embeddings using hundreds of open source models. These models, trained on vast amounts of data, capture the semantic meaning of text and enable powerful analysis and search capabilities.
+- **Embedding Generation from Open Source Models**: The JavaScript SDK provides the ability to generate embeddings using hundreds of open source models. These models, trained on vast amounts of data, capture the semantic meaning of text and enable powerful analysis and search capabilities.
 
-- **Flexible and Scalable Vector Search**: The Javascript SDK empowers you to build flexible and scalable vector search applications. The Javascript SDK seamlessly integrates with PgVector, a PostgreSQL extension specifically designed for handling vector-based indexing and querying. By leveraging these indices, you can perform advanced searches, rank results by relevance, and retrieve accurate and meaningful information from your database.
+- **Flexible and Scalable Vector Search**: The JavaScript SDK empowers you to build flexible and scalable vector search applications. The JavaScript SDK seamlessly integrates with PgVector, a PostgreSQL extension specifically designed for handling vector-based indexing and querying. By leveraging these indices, you can perform advanced searches, rank results by relevance, and retrieve accurate and meaningful information from your database.
 
-### Use Cases
+## Use Cases
 
-Embeddings, the core concept of the pgml SDK, find applications in various scenarios, including:
+Embeddings, the core concept of the JavaScript SDK, find applications in various scenarios, including:
 
 - Search: Embeddings are commonly used for search functionalities, where results are ranked by relevance to a query string. By comparing the embeddings of query strings and documents, you can retrieve search results in order of their similarity or relevance.
 
@@ -42,517 +36,446 @@ Embeddings, the core concept of the pgml SDK, find applications in various scena
 
 - Classification: Embeddings are utilized in classification tasks, where text strings are classified based on their most similar label. By comparing the embeddings of text strings and labels, you can classify new text strings into predefined categories.
 
-### How the SDK Works
+## How the JavaScript SDK Works
 
-The SDK streamlines the development of vector search applications by abstracting away the complexities of database management and indexing. Here's an overview of how the SDK works:
+The JavaScript SDK streamlines the development of vector search applications by abstracting away the complexities of database management and indexing. Here's an overview of how the SDK works:
 
-- **Document and Text Chunk Management**: The SDK provides a convenient interface to create, update, and delete documents and their corresponding text chunks. You can easily organize and structure your text data within the PostgreSQL database.
+- **Automatic Document and Text Chunk Management**: The SDK provides a convenient interface to manage documents and pipelines, automatically handling chunking and embedding for you. You can easily organize and structure your text data within the PostgreSQL database.
 
 - **Open Source Model Integration**: With the SDK, you can seamlessly incorporate a wide range of open source models to generate high-quality embeddings. These models capture the semantic meaning of text and enable powerful analysis and search capabilities.
 
-- **Embedding Indexing**: The Javascript SDK utilizes the PgVector extension to efficiently index the embeddings generated by the open source models. This indexing process optimizes search performance and allows for fast and accurate retrieval of relevant results.
+- **Embedding Indexing**: The JavaScript SDK utilizes the PgVector extension to efficiently index the embeddings generated by the open source models. This indexing process optimizes search performance and allows for fast and accurate retrieval of relevant results.
 
 - **Querying and Search**: Once the embeddings are indexed, you can perform vector-based searches on the documents and text chunks stored in the PostgreSQL database. The SDK provides intuitive methods for executing queries and retrieving search results.
 
-## Quickstart
+# Quickstart
 
-Follow the steps below to quickly get started with the Javascript SDK for building scalable vector search applications on PostgresML databases.
+Follow the steps below to quickly get started with the JavaScript SDK for building scalable vector search applications on PostgresML databases.
 
-### Prerequisites
+## Prerequisites
 
 Before you begin, make sure you have the following:
 
-- PostgresML Database: You can [sign up for a free GPU-powered database](https://postgresml.org/signup) or [spin up a database using Docker](https://github.com/postgresml/postgresml#installation). Ensure you have a PostgresML database version >`2.3.1`. Set the `PGML_CONNECTION` environment variable to the connection string of your PostgresML database. If not set, the SDK will use the default connection string for your local installation `postgres://postgres@127.0.0.1:5433/pgml_development`.
+- PostgresML Database: Ensure you have a PostgresML database version >=`2.7.7`. You can spin up a database using [Docker](https://github.com/postgresml/postgresml#installation) or [sign up for a free GPU-powered database](https://postgresml.org/signup).
 
-To install the Javascript SDK:
+- Set the `DATABASE_URL` environment variable to the connection string of your PostgresML database.
 
-```bash
-npm install pgml
+## Installation
+
+To install the JavaScript SDK, use npm:
+
+```
+npm i pgml
 ```
 
-or
+## Sample Code
 
-```bash
-yarn add pgml
-```
-
-### Example Usage
-
-In the example below we will step through the code required to create a collection, upsert documents, generate chunks, generate embeddings, and perform vector search.
-
-#### Initialize project
-
-Run the following command to create a new npm project:
-
-```bash
-mkdir pgml_example && cd pgml_example && npm init
-```
-
-Install required npm packages:
-
-```bash
-npm install pgml dotenv
-```
-
-Create index.js file:
-
-```bash
-touch index.js .env
-```
-
-Add your postgres connection string to the .env file:
-
-```bash
-PGML_CONNECTION=postgres://postgres@localhost:5433/pgml_development
-```
-
-#### Create a collection
-
-Add the following code to index.js:
+Once you have the JavaScript SDK installed, you can use the following sample code as a starting point for your vector search application:
 
 ```javascript
 const pgml = require("pgml");
-require("dotenv").config();
-
-const CONNECTION_STRING =
-  process.env.PGML_CONNECTION ||
-  "postgres://postgres@127.0.0.1:5433/pgml_development";
-
-const db = await pgml.newDatabase(CONNECTION_STRING);
 
 const main = async () => {
-  const collection_name = "hello_world";
-  const collection = await db.create_or_get_collection(collection_name);
-};
-
-main().then((results) => {
-  console.log("Vector search Results: ", results);
-});
+    const collection = pgml.newCollection("my_javascript_collection");
 ```
 
 **Explanation:**
 
-- The code imports the pgml sdk and dotenv.
-- It defines the CONNECTION_STRING variable with the default local connection string, and retrieves the connection information from the PGML_CONNECTION environment variable or uses the default if not set.
-- An instance of the Database class is created by passing the connection information.
-- The method [`create_or_get_collection`](#create-or-get-a-collection) collection with the name `hello_world` is retrieved if it exists or a new collection is created.
+- This code imports `pgml` and creates an instance of the Collection class which we will add pipelines and documents onto
 
-Continuing within `main()`
+Continuing within `const main`
 
 ```javascript
-const documents = [
-  {
-    name: "Document One",
-    text: "document one contents...",
-  },
-  {
-    name: "Document Two",
-    text: "document two contents...",
-  },
-];
-await collection.upsert_documents(documents);
-await collection.generate_chunks();
-await collection.generate_embeddings();
+    const model = pgml.newModel();
+    const splitter = pgml.newSplitter();
+    const pipeline = pgml.newPipeline("my_javascript_pipeline", model, splitter);
+    await collection.add_pipeline(pipeline);
 ```
 
-**Explanation:**
+**Explanation**
 
-- We define a list of documents with the `name` and `text` fields. The "text" field contains the string that will be embedded. The other fields will be stored as a 'metadata' object.
-- The [`upsert_documents`](#upsert-documents) method is called to insert or update the documents in the collection.
-- The [`generate_chunks`](#generate-chunks) method splits the documents into smaller text chunks for efficient indexing and search.
-- The [`generate_embeddings`](#generate-embeddings) method generates embeddings for the documents in the collection.
+- The code creates an instance of `Model` and `Splitter` using their default arguments.
+- Finally, the code constructs a pipeline called `"my_javascript_pipeline"` and add it to the collection we Initialized above. This pipeline automatically generates chunks and embeddings for every upserted document.
 
-Continuing within `main()`
+Continuing with `const main`
 
 ```javascript
-const results = await collection.vector_search(
-  "What are the contents of document one?",
-  {},
-  1
-);
-// convert the results to array of objects
-const results = queryResults.map((result) => {
-  const [similarity, text, metadata] = result;
-  return {
-    similarity,
-    text,
-    metadata,
-  };
-});
-await db.archive_collection(collection_name);
-return results;
+    const documents = [
+        {
+          id: "Document One",
+          text: "document one contents...",
+        },
+        {
+          id: "Document Two",
+          text: "document two contents...",
+        },
+    ];
+    await collection.upsert_documents(documents);
+```
+
+**Explanation**
+
+- This code crates and upserts some filler documents. 
+- As mentioned above, the pipeline added earlier automatically runs and generates chunks and embeddings for each document.
+
+Continuing within `const main`
+
+```javascript
+    const queryResults = await collection
+        .query()
+        .vector_recall("Some user query that will match document one first", pipeline)
+        .limit(2)
+        .fetch_all();
+
+    // Convert the results to an array of objects
+    const results = queryResults.map((result) => {
+      const [similarity, text, metadata] = result;
+      return {
+        similarity,
+        text,
+        metadata,
+      };
+    });
+    console.log(results);
+
+    await collection.archive();
 ```
 
 **Explanation:**
 
-- The [`vector_search`](#vector-search) method is used to perform a vector-based search on the collection. The first argument, `What are the contents of document one?`, represents the text for which you want to find the most similar results. The second argument is an object that holds the embedding model parameters, and in this case, it is empty. The third argument specifies the number of results to return.
-- Next we convert the results to an array of objects.
-- Lastly, the `archive_collection` method is called to archive the collection and free up resources in the PostgresML database.
+- The `query` method is called to perform a vector-based search on the collection. The query string is `Some user query that will match document one first`, and the top 2 results are requested.
+- The search results are converted to objects and printed.
+- Finally, the `archive` method is called to archive the collection and free up resources in the PostgresML database.
 
 Call `main` function.
 
 ```javascript
-main().then((results) => {
-  console.log("success!", results);
+main().then(() => {
+  console.log("Done with PostgresML demo");
 });
 ```
 
-**Putting it all together**
+**Running the Code**
 
-Assuming you followed along, you should have a file `index.js` that looks like this:
-
-```javascript
-const pgml = require("pgml");
-require("dotenv").config();
-
-const CONNECTION_STRING =
-  process.env.PGML_CONNECTION ||
-  "postgres://postgres@127.0.0.1:5433/pgml_development";
-
-const main = async () => {
-  const db = await pgml.newDatabase(CONNECTION_STRING);
-  const collection_name = "hello_world_2";
-  const collection = await db.create_or_get_collection(collection_name);
-  const documents = [
-    {
-      name: "Document One",
-      text: "document one contents...",
-    },
-    {
-      name: "Document Two",
-      text: "document two contents...",
-    },
-  ];
-  await collection.upsert_documents(documents);
-  await collection.generate_chunks();
-  await collection.generate_embeddings();
-  const queryResults = await collection.vector_search(
-    "What are the contents of document one?", // query text
-    {}, // embedding model parameters
-    1 // top_k
-  );
-
-  // convert the results to array of objects
-  const results = queryResults.map((result) => {
-    const [similarity, text, metadata] = result;
-    return {
-      similarity,
-      text,
-      metadata,
-    };
-  });
-
-  await db.archive_collection(collection_name);
-  return results;
-};
-
-main().then((results) => {
-  console.log("Vector search Results: ", results);
-});
-```
+Open a terminal or command prompt and navigate to the directory where the file is saved.
 
 Execute the following command:
 
 ```
-node index.js
+node vector_search.js
 ```
 
-You should see the search results printed in the terminal. As you can see, our vector search engine found the right text chunk with the answer we are looking for.
+You should see the search results printed in the terminal. As you can see, our vector search engine did match document one first.
 
-```json
+```javascript
 [
   {
-    "similarity": 0.917946581193032,
-    "text": "document one contents...",
-    "metadata": { "name": "Document One" }
+    similarity: 0.8506832955692104,
+    text: 'document one contents...',
+    metadata: { id: 'Document One' }
+  },
+  {
+    similarity: 0.8066114609244565,
+    text: 'document two contents...',
+    metadata: { id: 'Document Two' }
   }
 ]
 ```
 
-## Usage
 
-### High-level Description
+# Usage
 
-The Javascript SDK provides a set of functionalities to build scalable vector search applications on PostgresQL databases. It enables users to create a collection, which represents a schema in the database, to store tables for documents, chunks, models, splitters, and embeddings. The Collection class in the SDK handles all operations related to these tables, allowing users to interact with the collection and perform various tasks.
+## High-level Description
 
-### Connect to Database
+The JavaScript SDK provides a set of functionalities to build scalable vector search applications on PostgresQL databases. It enables users to create a collection, which represents a schema in the database, to store tables for documents, chunks, models, splitters, and embeddings. The Collection class in the SDK handles all operations related to these tables, allowing users to interact with the collection and perform various tasks.
 
-`.newDatabase(CONNECTION_STRING)`
+## Collections
 
-This method establishes a connection to a new database.
+Collections are the organizational building blocks of the SDK. They manage all documents and related chunks, embeddings, tsvectors, and pipelines.
 
-#### Parameters:
+### Creating Collections
 
-- `CONNECTION_STRING` (required): The connection string for the database. The connection string should be in the format of `postgres://username@hostname:port/database`. This parameter is required.
+By default, collections will read and write to the database specified by `DATABASE_URL`.
 
-The method initializes a connection pool to the DB and creates a table named `pgml.collections` if it does not already exist.
-
-#### Usage:
-
+**Create a Collection that uses the default `DATABASE_URL` environment variable.**
 ```javascript
-const pgml = require("pgml");
-
-const CONNECTION_STRING =
-  process.env.PGML_CONNECTION ||
-  "postgres://postgres@127.0.0.1:5433/pgml_development";
-
-const db = await pgml.newDatabase(CONNECTION_STRING);
+const collection = pgml.newCollection("test_collection")
 ```
 
-### Create or Get a Collection
-
-`.create_or_get_collection(collection_name)`
-
-This method either creates a new collection or retrieves an existing one from a PostgreSQL database.
-
-#### Parameters:
-
-- `collection_name` (required): The name of the collection to be created or retrieved. This parameter is required and must be a string.
-
-If the collection already exists in the database, this method will return that collection. If the collection does not exist, this method will create a new collection with the specified name, along with the associated tables and indices for documents, chunks, models, splitters, and embeddings.
-
-#### Usage:
-
+**Create a Collection that reads from a different database than that set by the environment variable `DATABASE_URL`.**
 ```javascript
-const collection_name = "test_collection";
-const collection = await db.create_or_get_collection(collection_name);
+const collection = pgml.newCollection("test_collection", CUSTOM_DATABASE_URL)
 ```
 
-In the above example, a collection named test_collection is either created or retrieved from the database.
+### Upserting Documents
 
-Ensure that the name provided is unique if you intend to create a new collection, as this function will return the existing collection if a collection with the same name already exists in the database.
+Documents are dictionaries with two required keys: `id` and `text`. All other keys/value pairs are stored as metadata for the document.
 
-### Upsert Documents
-
-`.upsert_documents(documents)`
-
-This method is used to insert or update documents in a database table based on their ID, text, and any additional fields. All the fields except `id` and `text` will be aggregated and stored in a `metadata` object.
-
-#### Parameters:
-
-- `documents` (required): An array of document objects to be inserted or updated in the database. Each document object should be a dictionary containing at least an `id` and `text` fields. Any other fields will be considered as metadata.
-  - `id`: A unique identifier for the document. If a document with the same ID already exists in the database, the document will be updated with the new text and metadata.
-  - `text`: The text content of the document.
-  - Other fields (optional): Any other fields in the document will be considered as metadata. The structure of the metadata can vary based on the specific needs of your application.
-
-#### Usage:
-
+**Upsert documents with metadata**
 ```javascript
-let documents = [
-  {
-    id: "1",
-    text: "This is a sample document",
-    author: "John Doe",
-    date: "2023-07-05",
-  },
-  {
-    id: "2",
-    text: "This is another sample document",
-  },
-];
-
-await collection.upsert_documents(documents);
+const documents = [
+    {
+        id: "Document 1",
+        text: "Here are the contents of Document 1",
+        random_key: "this will be metadata for the document"
+    },
+    {
+        id: "Document 2",
+        text: "Here are the contents of Document 2",
+        random_key: "this will be metadata for the document"
+    }
+]
+const collection = pgml.newCollection("test_collection")
+await collection.upsert_documents(documents)
 ```
 
-In the above example, two documents are upserted into the database. The first document includes additional fields `author` and `date`, which will be stored as metadata.
+### Searching Collections
 
-To update a document, simply upsert a document with the same `id` but different `text` or additional fields. For example:
+The JavaScript SDK is specifically designed to provide powerful, flexible vector search.
 
+Pipelines are required to perform search. See the [Pipelines Section](#pipelines) for more information about using Pipelines.
+
+**Basic vector search**
 ```javascript
-let updated_document = {
-  id: "1",
-  text: "This is an updated sample document",
-  author: "John Doe",
-  date: "2023-07-05",
-  version: "2.0",
-};
-
-await collection.upsert_documents([updated_document]);
+const collection = pgml.newCollection("test_collection")
+const pipeline = pgml.newPipeline("test_pipeline")
+const results = await collection.query().vector_recall("Why is PostgresML the best?", pipeline).fetch_all()
 ```
 
-In this case, the document with ID `1` is updated with new text and additional fields `version`. The fields `author`, `date`, and `version` will be stored as metadata.
-
-### Generate Chunks
-
-`.generate_chunks(splitter_id)`
-
-This method is used to generate chunks of text from unchunked documents using a specified text splitter.
-
-#### Parameters:
-
-- `splitter_id` (optional): The ID of the splitter used for segmenting the text into chunks. This parameter is optional. If not specified, it defaults to `1`, which corresponds to the `RecursiveCharacterTextSplitter` with default parameters.
-
-The `splitter_id` should correspond to a splitter that is already registered. If you want to use a different splitter, you need to register it first.
-
-#### Usage:
-
+**Vector search with custom limit**
 ```javascript
-await collection.generate_chunks(1);
+const collection = pgml.newCollection("test_collection")
+const pipeline = pgml.newPipeline("test_pipeline")
+const results = await collection.query().vector_recall("Why is PostgresML the best?", pipeline).limit(10).fetch_all()
 ```
 
-In the above example, `splitter_id` is specified as `1`, which means that the default `RecursiveCharacterTextSplitter` is used to generate chunks.
+#### Metadata Filtering
 
-To use a different splitter, you need to pass its corresponding ID. For example:
+We provide powerful and flexible arbitrarly nested metadata filtering based off of [MongoDB Comparison Operators](https://www.mongodb.com/docs/manual/reference/operator/query-comparison/). We support each operator mentioned except the `$nin`.
 
+**Vector search with $eq metadata filtering**
 ```javascript
-await collection.generate_chunks(2);
+const collection = pgml.newCollection("test_collection")
+const pipeline = pgml.newPipeline("test_pipeline")
+const results = await collection.query()
+    .vector_recall("Here is some query", pipeline)
+    .limit(10)
+    .filter({
+        metadata: {
+            uuid: {
+                $eq: 1
+            }    
+        }
+    })
+    .fetch_all()
 ```
 
-In this case, the splitter with ID `2` is used. Ensure that this ID corresponds to a registered splitter. If the splitter isn't registered yet, you'll need to do so before using this method. For information on how to register a new splitter, refer to the [`register_text_splitter`](#register-text-splitter) documentation.
+The above query would filter out all documents that do not contain a key `uuid` equal to `1`.
 
-### Generate Embeddings
-
-`.generate_embeddings(model_id, splitter_id)`
-
-This method generates embeddings from the chunks of text.
-
-#### Parameters:
-
-- `model_id` (optional): The ID of the model used to generate embeddings. This parameter is optional. If not specified, it defaults to `1`, corresponding to the `intfloat/e5-small` embeddings model.
-- `splitter_id` (optional): The ID of the splitter used for segmenting the text into chunks. This parameter is optional. If not specified, it defaults to `1`.
-
-Both `splitter_id` and `model_id` should correspond to a splitter and model that are already registered.
-
-#### Usage:
-
+**Vector search with $gte metadata filtering**
 ```javascript
-await collection.generate_embeddings(1, 1);
+const collection = pgml.newCollection("test_collection")
+const pipeline = pgml.newPipeline("test_pipeline")
+const results = await collection.query()
+    .vector_recall("Here is some query", pipeline)
+    .limit(10)
+    .filter({
+        metadata: {
+            index: {
+                $gte: 3
+            }    
+        }
+    })
+    .fetch_all()
+)
 ```
 
-In the above example, both `splitter_id` and `model_id` are specified as `1`, which means that the default splitter and `intfloat/e5-small` model are used to generate embeddings.
+The above query would filter out all documents that do not contain a key `index` with a value greater than `3`.
 
-To use a different splitter or model, you need to pass their corresponding IDs. For example:
-
+**Vector search with $or and $and metadata filtering**
 ```javascript
-await collection.generate_embeddings(2, 3);
+const collection = pgml.newCollection("test_collection")
+const pipeline = pgml.newPipeline("test_pipeline")
+const results = await collection.query()
+    .vector_recall("Here is some query", pipeline)
+    .limit(10)
+    .filter({
+        metadata: {
+            $or: [
+                {
+                    $and: [
+                        {
+                            uuid: {
+                                $eq: 1
+                            }    
+                        },
+                        {
+                            index: {
+                                $lt: 100 
+                            }
+                        }
+                    ] 
+                },
+                {
+                   special: {
+                        $ne: true
+                    } 
+                }
+            ]    
+        }
+    })
+    .fetch_all()
 ```
 
-In this case, the splitter with ID `3` and the model with ID `2` are used. Ensure that these IDs correspond to a registered splitter and model.
+The above query would filter out all documents that do not have a key `special` with a value `True` or (have a key `uuid` equal to 1 and a key `index` less than 100).
 
-### Vector Search
+#### Full Text Filtering
 
-`.vector_search(query, top_k, model_id, splitter_id)`
-
-This method converts the input query into embeddings and searches the embeddings table for the nearest matches.
-
-#### Parameters:
-
-- `query` (required): The query text that needs to be converted into embeddings for vector search.
-- `top_k` (optional): The number of top matches that should be returned. This parameter is optional. If not specified, it defaults to `10`.
-- `model_id` (optional): The ID of the model used to convert query into embeddings. This parameter is optional. If not specified, it defaults to `1`, corresponding to the `intfloat/e5-small` embeddings model.
-- `splitter_id` (optional): The ID of the splitter used for segmenting the query text into chunks. This parameter is optional. If not specified, it defaults to `1`.
-
-Both `splitter_id` and `model_id` should correspond to a splitter and model that are already registered.
-
-#### Usage:
+If full text search is enabled for the associated Pipeline, documents can be first filtered by full text search and then recalled by embedding similarity.
 
 ```javascript
-const results = await collection.vector_search(
-  "Who won 20 grammy awards?",
-  2, // top_k
-  1 // model_id
-  1, // splitter_id
-);
+const collection = pgml.newCollection("test_collection")
+const pipeline = pgml.newPipeline("test_pipeline")
+const results = await collection.query()
+    .vector_recall("Here is some query", pipeline)
+    .limit(10)
+    .filter({
+        full_text: {
+            configuration: "english",
+            text: "Match Me"
+        }
+    })
+    .fetch_all()
 ```
 
-The `vector_search` method returns an array of results, where each result is a an array where idx 0 is the similarity score, idx 1 is the text, and idx 2 is the metadata object.
+The above query would first filter out all documents that do not match the full text search criteria, and then perform vector recall on the remaining documents.
 
-You can format the results into an array of objects like so:
+## Pipelines
+
+Collections can have any number of Pipelines. Each Pipeline is ran everytime documents are upserted.
+
+Pipelines are composed of a Model, Splitter, and additional optional arguments.
+
+### Models
+
+Models are used for embedding chuncked documents. We support most every open source model on [Hugging Face](https://huggingface.co/), and also OpenAI's embedding models.
+
+**Create a default Model "intfloat/e5-small" with default parameters: {}**
+```javascript
+const model = pgml.newModel()
+```
+
+**Create a Model with custom parameters**
+```javascript
+const model = pgml.newModel(
+    "hkunlp/instructor-base",
+    {instruction: "Represent the Wikipedia document for retrieval: "}    
+)
+```
+
+**Use an OpenAI model**
+```javascript
+const model = pgml.newModel("text-embedding-ada-002", "openai")
+```
+
+### Splitters
+
+Splitters are used to split documents into chunks before embedding them. We support splitters found in [LangChain](https://www.langchain.com/).
+
+**Create a default Splitter "recursive_character" with default parameters: {}**
+```javascript
+const splitter = pgml.newSplitter()
+```
+
+**Create a Splitter with custom parameters**
+```javascript
+const splitter = pgml.newSplitter(
+    "recursive_character", 
+    {chunk_size: 1500, chunk_overlap: 40}
+)
+```
+
+### Adding Pipelines to a Collection 
+
+When adding a Pipeline to a collection it is required that Pipeline has a Model and Splitter.
+
+The first time a Pipeline is added to a Collection it will automatically chunk and embed any documents already in that Collection. 
 
 ```javascript
-// convert the results to array of objects
-const results = queryResults.map((result) => {
-  const [similarity, text, metadata] = result;
-  return {
-    similarity,
-    text,
-    metadata,
-  };
-});
+const model = pgml.newModel()
+const splitter = pgml.newSplitter()
+const pipeline = pgml.newPipeline("test_pipeline", model, splitter)
+await collection.add_pipeline(pipeline)
 ```
 
-### Register Model
+### Enabling full text search
 
-`.register_model(model_name, model_params)`
+Pipelines can take additional arguments enabling full text search. When full text search is enabled, in addition to automatically chunking and embedding, the Pipeline will create the necessary tsvectors to perform full text search.
 
-This method allows for the registration of a model that can be used in the collection. It creates a record if the model does not already exist.
-
-#### Parameters:
-
-- `model_name` (required): The name of the open source HuggingFace model being registered. This should be a string that represents the model name.
-- `model_params` (optional): A dictionary containing parameters for configuring the model. This parameter is optional and can be left empty if no special configuration is needed for the model.
-
-The `model_name` should correspond to a valid HuggingFace model name. The `model_params`, if provided, should be a dictionary where keys are parameter names and values are the corresponding settings.
-
-#### Usage:
+For more information on full text search please see: [Postgres Full Text Search](https://www.postgresql.org/docs/15/textsearch.html).
 
 ```javascript
-const modelId = await collection.register_model("hkunlp/instructor-xl", {
-  instruction: "Represent the Wikipedia document for retrieval: ",
-});
+const model = pgml.newModel()
+const splitter = pgml.newSplitter()
+const pipeline = pgml.newPipeline("test_pipeline", model, splitter, {
+    "full_text_search": {
+        active: True,
+        configuration: "english"
+    }
+})
+await collection.add_pipeline(pipeline)
 ```
 
-In the above example, the `model_name` is "hkunlp/instructor-xl", and `model_params` is an object that sets the instruction to "Represent the Wikipedia document for retrieval: ".
+### Searching with Pipelines
 
-To register a model without any special parameters, you can simply pass the model name. For example:
+Pipelines are a required argument when performing vector search. After a Pipeline has been added to a Collection, the Model and Splitter can be omitted when instantiating it.
 
 ```javascript
-const modelId = await collection.register_model("distilbert-base-uncased");
+const pipeline = pgml.newPipeline("test_pipeline")
+const collection = pgml.newCollection("test_collection")
+const results = await collection.query().vector_recall("Why is PostgresML the best?", pipeline).fetch_all()
 ```
 
-In this case, the model "distilbert-base-uncased" is registered with the default parameters. Make sure that the model name corresponds to a valid HuggingFace model.
+### Enabling, Disabling, and Removing Pipelines
 
-### Register Text Splitter
+Pipelines can be disabled or removed to prevent them from running automatically when documents are upserted. 
 
-`.register_text_splitter(splitter_name, parameters)`
-
-This method registers a new text splitter in the system.
-
-#### Parameters:
-
-- `splitter_name` (required): The name of the splitter. The system currently supports the following splitter names:
-
-  - `"character"`
-  - `"latex"`
-  - `"markdown"`
-  - `"nltk"`
-  - `"python"`
-  - `"recursive_character"`
-  - `"spacy"`
-
-- `parameters` (required): This is an object that contains the parameters specific to the splitter. For example, if you're using the `"recursive_character"` splitter, the parameters could be:
-  - `chunk_size`: Specifies the size of each chunk of text.
-  - `chunk_overlap`: Specifies how much each chunk should overlap with the next.
-
-The parameters required will depend on the splitter being used. Please refer to the [LangChain documentation](https://python.langchain.com/en/latest/reference/modules/text_splitter.html) for more details.
-
-#### Usage:
-
+**Disable a Pipeline**
 ```javascript
-const textSplitterId = await collection.register_text_splitter(
-  "recursive_character",
-  { chunk_size: "100", chunk_overlap: "20" }
-);
+const pipeline = pgml.newPipeline("test_pipeline")
+const collection = pgml.newCollection("test_collection")
+await collection.disable_pipeline(pipeline)
 ```
 
-In the above example, the `recursive_character` splitter is registered with a `chunk_size` of `100` and `chunk_overlap` of `20`. The method returns the ID of the registered splitter, which can be used in other methods like `.generate_embeddings()`.
+Disabling a Pipeline prevents it from running automatically, but leaves all chunks and embeddings already created by that Pipeline in the database.
 
-Ensure that the `splitter_name` corresponds to one of the registered splitters, and the parameters match the requirements of that specific splitter.
+**Enable a Pipeline**
+```javascript
+const pipeline = pgml.newPipeline("test_pipeline")
+const collection = pgml.newCollection("test_collection")
+await collection.enable_pipeline(pipeline)
+```
 
-### Developer Setup
+Enabling a Pipeline will cause it to automatically run and chunk and embed all documents it may have missed while disabled.
 
-This Javascript library is generated from our core rust-sdk. Please check [rust-sdk documentation](../../rust/pgml/README.md) for developer setup.
+**Remove a Pipeline**
+```javascript
+const pipeline = pgml.newPipeline("test_pipeline")
+const collection = pgml.newCollection("test_collection")
+await collection.remove_pipeline(pipeline)
+```
 
-### API Reference
+Removing a Pipeline deletes it and all associated data from the database. Removed Pipelines cannot be re-enabled but can be recreated.
 
-- [Database](./docs/pgml/database.md)
-- [Collection](./docs/pgml/collection.md)
+## Developer Setup
 
-### Roadmap
+This javascript library is generated from our core rust-sdk. Please check [rust-sdk documentation](../../README.md) for developer setup.
 
-- Enable filters on document metadata in `vector_search`. [Issue](https://github.com/postgresml/postgresml/issues/663)
-- `text_search` functionality on documents using Postgres text search. [Issue](https://github.com/postgresml/postgresml/issues/664)
-- `hybrid_search` functionality that does a combination of `vector_search` and `text_search` in an order specified by the user. [Issue](https://github.com/postgresml/postgresml/issues/665)
-- Ability to call and manage OpenAI embeddings for comparison purposes. [Issue](https://github.com/postgresml/postgresml/issues/666)
-- Save `vector_search` history for downstream monitoring of model performance. [Issue](https://github.com/postgresml/postgresml/issues/667)
-- Perform chunking on the DB with multiple langchain splitters. [Issue](https://github.com/postgresml/postgresml/issues/668)
+## Roadmap
+
+- [x] Enable filters on document metadata in `vector_search`. [Issue](https://github.com/postgresml/postgresml/issues/663)
+- [x] `text_search` functionality on documents using Postgres text search. [Issue](https://github.com/postgresml/postgresml/issues/664)
+- [x] `hybrid_search` functionality that does a combination of `vector_search` and `text_search`. [Issue](https://github.com/postgresml/postgresml/issues/665)
+- [x] Ability to call and manage OpenAI embeddings for comparison purposes. [Issue](https://github.com/postgresml/postgresml/issues/666)
+- [x] Perform chunking on the DB with multiple langchain splitters. [Issue](https://github.com/postgresml/postgresml/issues/668)
+- [ ] Save `vector_search` history for downstream monitoring of model performance. [Issue](https://github.com/postgresml/postgresml/issues/667)

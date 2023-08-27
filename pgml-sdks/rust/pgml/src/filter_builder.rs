@@ -36,10 +36,7 @@ fn serde_value_to_sea_query_value(value: &serde_json::Value) -> sea_query::Value
         let value = value.as_array().unwrap();
         let ty = get_sea_query_array_type(&value[0]);
         let value = Some(Box::new(
-            value
-                .iter()
-                .map(serde_value_to_sea_query_value)
-                .collect(),
+            value.iter().map(serde_value_to_sea_query_value).collect(),
         ));
         sea_query::Value::Array(ty, value)
     } else if value.is_object() {
@@ -120,9 +117,9 @@ fn get_value_type(value: &serde_json::Value) -> String {
     } else if value.is_string() {
         "text".to_string()
     } else if value.is_i64() {
-        "bigint".to_string()
+        "float8".to_string()
     } else if value.is_f64() {
-        "double".to_string()
+        "float8".to_string()
     } else if value.is_boolean() {
         "bool".to_string()
     } else {
