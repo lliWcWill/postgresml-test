@@ -30,13 +30,6 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 # Add your new code here
 logging.basicConfig(level=logging.DEBUG)
 
-# Initialize the tokenizer and encoder for GPT-4
-enc = encoding_for_model("gpt-4")
-
-INITIAL_TOKEN_LIMIT = 8100
-MAX_RESPONSE_TOKENS = 7200
-
-
 # System prompt placeholder
 system_prompt = "How can I assist you today?"
 
@@ -52,13 +45,6 @@ async def get_prompt(user_input):
 def handler(signum, frame):
     print("Exiting...")
     exit(0)
-
-
-def count_message_tokens(messages):
-    """Counts the number of tokens in a list of messages."""
-    token_count = sum([len(enc.encode(message["content"])) for message in messages])
-    print(f"[green]Token count: {token_count}[/green]")
-    return token_count
 
 
 signal.signal(signal.SIGINT, handler)
@@ -160,6 +146,17 @@ async def ingest_documents(folder: str):
     total_docs = await upsert_documents(folder)
     log.info("Total documents: " + str(total_docs))
 
+# Initialize the tokenizer and encoder for GPT-4
+enc = encoding_for_model("gpt-4")
+
+INITIAL_TOKEN_LIMIT = 8100
+MAX_RESPONSE_TOKENS = 7200
+
+def count_message_tokens(messages):
+    """Counts the number of tokens in a list of messages."""
+    token_count = sum([len(enc.encode(message["content"])) for message in messages])
+    print(f"[green]Token count: {token_count}[/green]")
+    return token_count
 
 async def generate_response(messages, openai_api_key, temperature=0.1):
     """Generates a response using OpenAI and ensures token limits are respected."""
