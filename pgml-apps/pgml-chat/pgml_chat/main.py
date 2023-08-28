@@ -118,11 +118,11 @@ async def upsert_documents(folder: str) -> int:
 
 
 async def generate_response(
-    messages, openai_api_key, temperature=0.7, max_tokens=256, top_p=0.9
+    messages, openai_api_key, temperature=0.3, max_tokens=5000, top_p=0.3
 ):
     openai.api_key = openai_api_key
     response = openai.ChatCompletion.create(
-        model="gpt-3.5-turbo",
+        model="gpt-4-0613",
         messages=messages,
         temperature=temperature,
         max_tokens=max_tokens,
@@ -263,4 +263,6 @@ def main():
         client.run(os.environ["DISCORD_BOT_TOKEN"])
     else:
         asyncio.run(run())
+
+
 main()
