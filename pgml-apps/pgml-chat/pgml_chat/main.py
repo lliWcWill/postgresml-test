@@ -12,13 +12,11 @@ from tiktoken import encoding_for_model
 import openai
 import glob
 import argparse
-from time import time
+import time
 import signal
 import readline
 from halo import Halo
 import ast
-from slack_bolt.async_app import AsyncApp
-from slack_bolt.adapter.socket_mode.aiohttp import AsyncSocketModeHandler
 import requests
 
 # Load environment variables
@@ -27,8 +25,31 @@ SYSTEM_PROMPT = os.environ.get("SYSTEM_PROMPT")
 BASE_PROMPT = os.getenv("BASE_PROMPT")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
+
 # Add your new code here
-logging.basicConfig(level=logging.DEBUG)
+# # logging.basicConfig(level=logging.DEBUG)  # Comment out or remove this line
+class NewlineFilter(logging.Filter):
+    def filter(self, record):
+        record.msg = record.msg.replace("\\n\\", "\n")
+        return True
+
+
+# Create a logger and add the filter
+logger = logging.getLogger()
+logger.addFilter(NewlineFilter())
+
+# Set up the logging configuration
+FORMAT = "%(message)s"
+logging.basicConfig(
+    level=logging.DEBUG,  # Set the logging level to DEBUG
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+    handlers=[
+        RichHandler(rich_tracebacks=True)
+    ],  # Use RichHandler for rich, colored output
+)
+
+log = logging.getLogger("rich")  # Get the logger named 'rich'
 
 # System prompt placeholder
 system_prompt = "How can I assist you today?"
@@ -146,11 +167,13 @@ async def ingest_documents(folder: str):
     total_docs = await upsert_documents(folder)
     log.info("Total documents: " + str(total_docs))
 
+
 # Initialize the tokenizer and encoder for GPT-4
 enc = encoding_for_model("gpt-4")
 
-INITIAL_TOKEN_LIMIT = 8100
-MAX_RESPONSE_TOKENS = 7200
+INITIAL_TOKEN_LIMIT = 14500
+MAX_RESPONSE_TOKENS = 15500
+
 
 def count_message_tokens(messages):
     """Counts the number of tokens in a list of messages."""
@@ -158,7 +181,8 @@ def count_message_tokens(messages):
     print(f"[green]Token count: {token_count}[/green]")
     return token_count
 
-async def generate_response(messages, openai_api_key, temperature=0.1):
+
+async def generate_response(messages, openai_api_key, temperature=0.2):
     """Generates a response using OpenAI and ensures token limits are respected."""
 
     # Count the tokens of the initial messages
@@ -175,14 +199,14 @@ async def generate_response(messages, openai_api_key, temperature=0.1):
         )
 
     # Calculate available tokens for the completion
-    allowed_completion_tokens = 8192 - initial_tokens
+    allowed_completion_tokens = 15000 - initial_tokens
     completion_tokens = min(MAX_RESPONSE_TOKENS, allowed_completion_tokens)
     print(f"[green]Available tokens for completion: {completion_tokens}[/green]")
 
+    openai.api_key = openai_api_key
     try:
-        openai.api_key = openai_api_key
         response = openai.ChatCompletion.create(
-            model="gpt-4-0314",
+            model="gpt-3.5-turbo-16k-0613",
             messages=messages,
             temperature=temperature,
             max_tokens=completion_tokens,
@@ -190,10 +214,11 @@ async def generate_response(messages, openai_api_key, temperature=0.1):
             frequency_penalty=0,
             presence_penalty=0,
         )
+
     except Exception as e:
-        print(f"[red]Error while calling OpenAI API: {e}[/red]")
+        # print(f"[red]Error while calling OpenAI API: {e}[/red]")
         return (
-            "An error occurred while processing your request. Please try again later."
+            #   "An error occurred while processing your request. Please try again later."
         )
 
     # Add OpenAI's response to the messages list
@@ -207,10 +232,10 @@ async def generate_response(messages, openai_api_key, temperature=0.1):
         f"[green]Total tokens after including OpenAI's response: {total_tokens_after_response}[/green]"
     )
 
-    # Check if the total tokens after the response exceed the max limit of 8192
-    if total_tokens_after_response > 8192:
+    # Check if the total tokens after the response exceed the max limit of 16000
+    if total_tokens_after_response > 16000:
         print(
-            f"[red]Total tokens {total_tokens_after_response} exceed the model's maximum context length of 8192. Cancelling query.[/red]"
+            f"[red]Total tokens {total_tokens_after_response} exceed the model's maximum context length of 16000. Cancelling query.[/red]"
         )
         return (
             "Token limit exceeded after including OpenAI's response. Query cancelled."
@@ -219,7 +244,7 @@ async def generate_response(messages, openai_api_key, temperature=0.1):
     return response["choices"][0]["message"]["content"]
 
 
-def trim_text_to_fit_token_limit(text, max_tokens=8100):
+def trim_text_to_fit_token_limit(text, max_tokens=16000):
     """
     Trim the text to fit within the token limit.
     """
@@ -262,6 +287,8 @@ async def chat_cli():
 
             # Start the spinner before making the request.
             with Halo(text="Processing...", spinner="dots"):
+                time.sleep(5)  # simulate some processing delay
+
                 # Construct the message to be sent to OpenAI.
                 messages = [
                     {
@@ -274,12 +301,12 @@ async def chat_cli():
                     },
                 ]
 
-            # Generate response from OpenAI.
-            response = await generate_response(
-                messages, OPENAI_API_KEY, temperature=0.002
-            )
+                # Generate response from OpenAI.
+                response = await generate_response(
+                    messages, OPENAI_API_KEY, temperature=0.002
+                )
 
-            print(f"ITS Assistant: {response}")
+                print(f"ITS Assistant: {response}")
 
         except KeyboardInterrupt:
             print("\nExiting chat...")
@@ -338,21 +365,27 @@ async def run():
                             openai_api_key,
                             temperature=0.2,
                         )
-                        # Check if the response contains the fallback message
-                        if (
-                            "We are working to connect you with the neccassary resources"
-                            in response
-                        ):
-                            # If it does, remove it
-                            response = response.replace("Please Try Again.", "")
-                        await message.channel.send(response)
+
+                        # Split and send the response if it's too long for Discord
+                        while len(response) > 0:
+                            # Ensure we don't cut off in the middle of a word
+                            if len(response) > 2000:
+                                cut_off_index = response[:2000].rfind(" ")
+                                chunk = response[:cut_off_index]
+                                response = response[cut_off_index:].strip()
+                            else:
+                                chunk = response
+                                response = ""
+
+                            await message.channel.send(chunk)
+
                     except Exception as e:
                         await message.channel.send(
                             "Sorry, I encountered an error. Please try again later."
                         )
 
-                    # This line is necessary for processing commands
-                    await bot.process_commands(message)
+                # This line is necessary for processing commands
+                await bot.process_commands(message)
 
             # Run the bot
             await bot.start(os.environ.get("DISCORD_BOT_TOKEN"))
@@ -364,8 +397,6 @@ def main():
     elif args.stage == "chat":
         if args.chat_interface == "cli":
             asyncio.run(chat_cli())
-        elif args.chat_interface == "slack":
-            asyncio.run(chat_slack())
         elif args.chat_interface == "discord":
             # Run the bot
             asyncio.run(run())  # Note: using asyncio.run here
