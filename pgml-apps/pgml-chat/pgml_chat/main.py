@@ -25,8 +25,9 @@ SYSTEM_PROMPT = os.environ.get("SYSTEM_PROMPT")
 BASE_PROMPT = os.getenv("BASE_PROMPT")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
+OA_model_name = "gpt-3.5-turbo-16k-0613"
 
-# Add your new code here
+
 # # logging.basicConfig(level=logging.DEBUG)  # Comment out or remove this line
 class NewlineFilter(logging.Filter):
     def filter(self, record):
@@ -130,6 +131,7 @@ splitter_name = os.environ.get("SPLITTER", "recursive_character")
 splitter_params = os.environ.get(
     "SPLITTER_PARAMS", {"chunk_size": 1500, "chunk_overlap": 40}
 )
+
 splitter = Splitter(splitter_name, splitter_params)
 model_name = os.environ.get("MODEL", "intfloat/e5-small")
 model_params = ast.literal_eval(os.environ.get("MODEL_PARAMS", {}))
@@ -174,11 +176,13 @@ enc = encoding_for_model("gpt-4")
 
 INITIAL_TOKEN_LIMIT = 14500
 MAX_RESPONSE_TOKENS = 15500
+MAX_TOKEN_LIMIT = 16000
 
 
 def count_message_tokens(messages):
     """Counts the number of tokens in a list of messages."""
-    token_count = sum([len(enc.encode(message["content"])) for message in messages])
+    all_messages_content = [message["content"] for message in messages]
+    token_count = len(enc.encode(" ".join(all_messages_content)))
     print(f"[green]Token count: {token_count}[/green]")
     return token_count
 
@@ -193,7 +197,9 @@ async def generate_response(messages, openai_api_key, temperature=0.2):
     # Identify and trim or remove the most verbose message if tokens exceed the limit
     while initial_tokens > INITIAL_TOKEN_LIMIT:
         most_verbose_message = max(messages, key=lambda x: count_message_tokens([x]))
-        messages.remove(most_verbose_message)
+        most_verbose_message["content"] = trim_text_to_fit_token_limit(
+            most_verbose_message["content"], max_tokens=INITIAL_TOKEN_LIMIT
+        )
         initial_tokens = count_message_tokens(messages)
         print(
             "[green]Note: Your request is extensive, and some older messages were trimmed to process it. Please provide more specific details or break your request into smaller parts if needed.[/green]"
@@ -207,7 +213,7 @@ async def generate_response(messages, openai_api_key, temperature=0.2):
     openai.api_key = openai_api_key
     try:
         response = openai.ChatCompletion.create(
-            model="gpt-3.5-turbo-16k-0613",
+            model=OA_model_name,
             messages=messages,
             temperature=temperature,
             max_tokens=completion_tokens,
@@ -216,8 +222,28 @@ async def generate_response(messages, openai_api_key, temperature=0.2):
             presence_penalty=0,
         )
 
+    except openai.error.APIError as e:
+        print(f"[red]OpenAI API returned an API Error: {e}[/red]")
+        return (
+            "An error occurred while processing your request. Please try again later."
+        )
+
+    except openai.error.APIConnectionError as e:
+        print(f"[red]Failed to connect to OpenAI API: {e}[/red]")
+        return "Failed to connect to OpenAI API. Please try again later."
+
+    except openai.error.RateLimitError as e:
+        print(f"[red]OpenAI API request exceeded rate limit: {e}[/red]")
+        return "OpenAI API request exceeded rate limit. Please try again later."
+
     except Exception as e:
-        # print(f"[red]Error while calling OpenAI API: {e}[/red]")
+        print(f"[red]Error while calling OpenAI API: {e}[/red]")
+        return (
+            "An error occurred while processing your request. Please try again later."
+        )
+
+    except Exception as e:
+        print(f"[red]Error while calling OpenAI API: {e}[/red]")
         return (
             #   "An error occurred while processing your request. Please try again later."
         )
@@ -234,7 +260,7 @@ async def generate_response(messages, openai_api_key, temperature=0.2):
     )
 
     # Check if the total tokens after the response exceed the max limit of 16000
-    if total_tokens_after_response > 16000:
+    if total_tokens_after_response > MAX_TOKEN_LIMIT:
         print(
             f"[red]Total tokens {total_tokens_after_response} exceed the model's maximum context length of 16000. Cancelling query.[/red]"
         )
@@ -245,7 +271,7 @@ async def generate_response(messages, openai_api_key, temperature=0.2):
     return response["choices"][0]["message"]["content"]
 
 
-def trim_text_to_fit_token_limit(text, max_tokens=16000):
+def trim_text_to_fit_token_limit(text, max_tokens=MAX_TOKEN_LIMIT):
     """
     Trim the text to fit within the token limit.
     """
