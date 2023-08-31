@@ -36,6 +36,16 @@
   <meta name="twitter:creator" content="@postgresml">
   <meta name="twitter:title" content="<%= head.title %> – PostgresML">
 
+  <script type="importmap" data-turbo-track="reload">
+    {
+      "imports": {
+        "@hotwired/stimulus": "/dashboard/static/js/libs/stimulus-3.2.1.min.js",
+        "@lodash/core": "/dashboard/static/js/libs/lodash-4.17.15-core.js",
+        "@postgresml/main": "<%= config::js_url("main.js") %>"
+      }
+    }
+  </script>
+
   <link rel="icon" href="/dashboard/static/images/owl.ico">
   <link rel="stylesheet" data-turbo-track="reload" href="<%- config::css_url() %>">
   <script defer src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.11.6/dist/umd/popper.min.js"></script>
@@ -46,7 +56,7 @@
   <script defer src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js" integrity="sha384-w76AqPfDkMBDXo30jS1Sgez6pr3x5MlQ1ZAGC+nuZB+EYdgRZgiwxhTBTkF7CXvN" crossorigin="anonymous"></script>
 
   <script async src="https://data.cloud.hyperparam.ai/script.js" data-website-id="499122fd-f307-4e8d-af4b-88b9f5e9903b"></script>
-  <script async src="https://unpkg.com/es-module-shims@1.6.3/dist/es-module-shims.js"></script>
+  <script async type="nomodule" src="https://unpkg.com/es-module-shims@1.6.3/dist/es-module-shims.js"></script>
   <script defer type="module" src="/dashboard/static/js/libs/turbo-7.3.0.min.js"></script>
   <script defer src="https://cdn.plot.ly/plotly-2.11.1.min.js"></script>
 
@@ -60,54 +70,8 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/6.65.7/addon/hint/show-hint.min.css" integrity="sha512-OmcLQEy8iGiD7PSm85s06dnR7G7C9C0VqahIPAj/KHk5RpOCmnC6R2ob1oK4/uwYhWa9BF1GC6tzxsC8TIx7Jg==" crossorigin="anonymous" referrerpolicy="no-referrer" />
 
   <script type="module" defer async src="/dashboard/static/js/libs/sortable-1.12.0.min.js"></script>
+  <script data-turbo-trace="reload" type="module" src="<%= config::js_url("bundle.js") %>" async defer></script>
 
-  <script type="importmap-shim" data-turbo-track="reload">
-    {
-      "imports": {
-        "@hotwired/stimulus": "/dashboard/static/js/libs/stimulus-3.2.1.min.js",
-        "@lodash/core": "/dashboard/static/js/libs/lodash-4.17.15-core.js",
-        "@postgresml/main": "<%= config::js_url("main.js") %>"
-      }
-    }
-  </script>
-  <script type="module-shim" data-turbo-track="reload">
-    import { Application } from '@hotwired/stimulus'
-
-    import ClickReplace from '<%= config::js_url("click-replace.js") %>'
-    import Search from '<%= config::js_url("search.js") %>'
-    import BtnSecondary from '<%= config::js_url("btn-secondary.js") %>'
-    import AutoreloadFrame from '<%= config::js_url("autoreload-frame.js") %>'
-    import XScrollerDrag from '<%= config::js_url("x-scroller-drag.js") %>'
-    import DocsToc from '<%= config::js_url("docs-toc.js") %>'
-    import Timeseries from '<%= config::js_url("timeseries.js") %>'
-    import EnableTooltip from '<%= config::js_url("enable-tooltip.js") %>'
-    import Copy from '<%= config::js_url("copy.js") %>'
-    import NewProject from '<%= config::js_url("new-project.js") %>'
-    import Notebook from '<%= config::js_url("notebook.js") %>'
-    import NotebookCell from '<%= config::js_url("notebook-cell.js") %>'
-    import QuickPrediction from '<%= config::js_url("quick-prediction.js") %>'
-    import TopnavStyling from '<%= config::js_url("topnav-styling.js") %>'
-    import TopnavWebApp from '<%= config::js_url("topnav-web-app.js") %>'
-    import ExtendBSCollapse from '<%= config::js_url("extend-bs-collapse.js") %>'
-
-    const application = Application.start()
-    application.register('click-replace', ClickReplace)
-    application.register('search', Search)
-    application.register('btn-secondary', BtnSecondary)
-    application.register('autoreload-frame', AutoreloadFrame)
-    application.register('x-scroller-drag', XScrollerDrag)
-    application.register('docs-toc', DocsToc)
-    application.register('timeseries', Timeseries)
-    application.register('enable-tooltip', EnableTooltip)
-    application.register('copy', Copy)
-    application.register('new-project', NewProject)
-    application.register('notebook', Notebook)
-    application.register('notebook-cell', NotebookCell)
-    application.register('quick-prediction', QuickPrediction)
-    application.register('topnav-styling', TopnavStyling)
-    application.register('topnav-web-app', TopnavWebApp)
-    application.register('extend-bs-collapse', ExtendBSCollapse)
-  </script>
 
   <% if config::dev_mode() { %>
   <!-- dev only - save page position after reload -->

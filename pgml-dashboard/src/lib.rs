@@ -10,6 +10,7 @@ use sqlx::PgPool;
 use std::collections::HashMap;
 
 pub mod api;
+pub mod components;
 pub mod fairings;
 pub mod forms;
 pub mod guards;
@@ -366,7 +367,12 @@ pub async fn models_index(cluster: ConnectedCluster<'_>) -> Result<ResponseOk, E
 #[get("/models/<id>")]
 pub async fn models_get(cluster: ConnectedCluster<'_>, id: i64) -> Result<ResponseOk, Error> {
     let model = models::Model::get_by_id(cluster.pool(), id).await?;
-    let snapshot = models::Snapshot::get_by_id(cluster.pool(), model.snapshot_id).await?;
+    let snapshot = if let Some(snapshot_id) = model.snapshot_id {
+        Some(models::Snapshot::get_by_id(cluster.pool(), snapshot_id).await?)
+    } else {
+        None
+    };
+
     let project = models::Project::get_by_id(cluster.pool(), model.project_id).await?;
 
     Ok(ResponseOk(
@@ -656,6 +662,12 @@ pub async fn dashboard(
     Ok(ResponseOk(
         layout.render(templates::Dashboard { tabs: nav_tabs }),
     ))
+}
+
+#[get("/playground")]
+pub async fn playground(cluster: &Cluster) -> Result<ResponseOk, Error> {
+    let mut layout = crate::templates::WebAppBase::new("Playground", &cluster.context);
+    Ok(ResponseOk(layout.render(templates::Playground {})))
 }
 
 pub fn routes() -> Vec<Route> {
