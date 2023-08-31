@@ -26,6 +26,7 @@ BASE_PROMPT = os.getenv("BASE_PROMPT")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
 OA_model_name = "gpt-3.5-turbo-16k-0613"
+TOTAL_TOKENS_USED = 0
 
 
 # # logging.basicConfig(level=logging.DEBUG)  # Comment out or remove this line
@@ -65,7 +66,12 @@ async def get_prompt(user_input):
 
 
 def handler(signum, frame):
+    global TOTAL_TOKENS_USED
     print("Exiting...")
+    print(f"Total tokens used in this session: {TOTAL_TOKENS_USED}")
+    price_per_token = 0.004 / 1000  # Price per token in dollars
+    total_price = TOTAL_TOKENS_USED * price_per_token
+    print(f"Total price of this session: ${total_price:.2f}")
     exit(0)
 
 
@@ -242,12 +248,6 @@ async def generate_response(messages, openai_api_key, temperature=0.2):
             "An error occurred while processing your request. Please try again later."
         )
 
-    except Exception as e:
-        print(f"[red]Error while calling OpenAI API: {e}[/red]")
-        return (
-            #   "An error occurred while processing your request. Please try again later."
-        )
-
     # Add OpenAI's response to the messages list
     messages.append(
         {"role": "ai", "content": response["choices"][0]["message"]["content"]}
@@ -268,7 +268,7 @@ async def generate_response(messages, openai_api_key, temperature=0.2):
             "Token limit exceeded after including OpenAI's response. Query cancelled."
         )
 
-    return response["choices"][0]["message"]["content"]
+    return response["choices"][0]["message"]["content"], total_tokens_after_response
 
 
 def trim_text_to_fit_token_limit(text, max_tokens=MAX_TOKEN_LIMIT):
@@ -304,6 +304,7 @@ async def get_prompt(user_input: str = ""):
 
 
 async def chat_cli():
+    global TOTAL_TOKENS_USED
     print("Welcome to IT Solutions Bot! How can I assist you today?")
     while True:
         try:
@@ -314,7 +315,9 @@ async def chat_cli():
 
             # Start the spinner before making the request.
             with Halo(text="Processing...", spinner="dots"):
-                time.sleep(5)  # simulate some processing delay
+                await asyncio.sleep(
+                    5
+                )  # simulate some processing delay with stopping asyncio
 
                 # Construct the message to be sent to OpenAI.
                 messages = [
@@ -329,15 +332,120 @@ async def chat_cli():
                 ]
 
                 # Generate response from OpenAI.
-                response = await generate_response(
-                    messages, OPENAI_API_KEY, temperature=0.002
+                response, tokens_used = await generate_response(
+                    messages, OPENAI_API_KEY, temperature=0.2
                 )
+                TOTAL_TOKENS_USED += tokens_used
 
                 print(f"ITS Assistant: {response}")
 
         except KeyboardInterrupt:
             print("\nExiting chat...")
             break
+
+
+import discord
+from discord.ext import commands
+
+intents = discord.Intents.default()
+intents.messages = True
+intents.reactions = True
+intents.guilds = True
+bot = commands.Bot(command_prefix="!", intents=intents)
+
+
+class TokenCounter:
+    def __init__(self):
+        self.total_tokens_used = 0
+
+    def add_tokens(self, tokens_used):
+        self.total_tokens_used += tokens_used
+
+
+async def process_user_message(message, is_reply, thread_id):
+    global TOTAL_TOKENS_USED
+    bot_mention = f"<@{bot.user.id}>"
+
+    if is_reply:
+        log.debug("Processing user reply...")
+        user_input = message.content.strip()
+    else:
+        print("Processing user mention...")
+        user_input = message.content.replace(bot_mention, "").strip()
+
+    query = await get_prompt(user_input)
+
+    try:
+        response, tokens_used = await generate_response(
+            bot.conversation_history[thread_id],  # Include the conversation history
+            openai_api_key,
+            temperature=0.2,
+        )
+        logging.debug("Response generated")
+        TOTAL_TOKENS_USED += tokens_used
+        logging.debug("Tokens counted")
+
+        # Add the bot's response to the conversation history
+        bot.conversation_history[thread_id].append({"role": "ai", "content": response})
+        logging.debug("Response added to conversation history")
+
+        logging.debug(f"Generated response: {response}")
+
+        # Split and send the response if it's too long for Discord
+        while len(response) > 0:
+            # Ensure we don't cut off in the middle of a word
+            if len(response) > 2000:
+                cut_off_index = response[:2000].rfind(" ")
+                chunk = response[:cut_off_index]
+                response = response[cut_off_index:].strip()
+            else:
+                chunk = response
+                response = ""
+
+            await message.reply(chunk)
+
+        logging.debug("Response sent")
+
+    except Exception as e:
+        logging.exception(f"Error while sending response: {e}")
+        await message.reply("Sorry, I encountered an error. Please try again later.")
+
+
+@bot.event
+async def on_ready():
+    print(f"We have logged in as {bot.user}")
+    log.info(f"We have logged in as {bot.user}")
+
+
+@bot.event
+async def on_message(message):
+    if message.author.bot:
+        return
+    logging.debug(f"Received a message: {message.content}")
+    # Create a dictionary to store the conversation history for each thread
+    if not hasattr(bot, "conversation_history"):
+        bot.conversation_history = {}
+
+    # Get the thread ID
+    thread_id = message.reference.message_id if message.reference else message.id
+
+    # Add the message to the conversation history
+    if thread_id not in bot.conversation_history:
+        bot.conversation_history[thread_id] = []
+    bot.conversation_history[thread_id].append(
+        {"role": "user", "content": message.content}
+    )
+
+    if message.reference and message.reference.resolved.author == bot.user:
+        logging.debug("Processing a reply to the bot's message")
+        await process_user_message(message, is_reply=True, thread_id=thread_id)
+
+    elif bot.user.mentioned_in(message):
+        logging.debug("Processing a mention of the bot")
+        await process_user_message(message, is_reply=False, thread_id=thread_id)
+
+    # This line is necessary for processing commands
+    await bot.process_commands(message)
 
 
 async def run():
@@ -358,75 +466,13 @@ async def run():
             # Slack related code
             pass
         elif chat_interface == "discord":
-            import discord
-            from discord.ext import commands
-
-            intents = discord.Intents.default()
-            intents.messages = True
-            intents.reactions = True
-            intents.guilds = True
-            bot = commands.Bot(command_prefix="!", intents=intents)
-
-            @bot.event
-            async def on_ready():
-                print(f"We have logged in as {bot.user}")
-                await bot.change_presence(
-                    activity=discord.Game(name="Mention me with a question!")
-                )
-
-            @bot.event
-            async def on_message(message):
-                if message.author.bot:
-                    return
-
-                bot_mention = f"<@{bot.user.id}>"
-
-                if bot_mention in message.content:
-                    print("Processing user request...")
-                    user_input = message.content.replace(bot_mention, "").strip()
-                    query = await get_prompt(user_input)
-
-                    try:
-                        response = await generate_response(
-                            [{"role": "user", "content": query}],
-                            openai_api_key,
-                            temperature=0.2,
-                        )
-
-                        # Split and send the response if it's too long for Discord
-                        while len(response) > 0:
-                            # Ensure we don't cut off in the middle of a word
-                            if len(response) > 2000:
-                                cut_off_index = response[:2000].rfind(" ")
-                                chunk = response[:cut_off_index]
-                                response = response[cut_off_index:].strip()
-                            else:
-                                chunk = response
-                                response = ""
-
-                            await message.channel.send(chunk)
-
-                    except Exception as e:
-                        await message.channel.send(
-                            "Sorry, I encountered an error. Please try again later."
-                        )
-
-                # This line is necessary for processing commands
-                await bot.process_commands(message)
-
-            # Run the bot
             await bot.start(os.environ.get("DISCORD_BOT_TOKEN"))
 
 
-def main():
-    if args.stage == "ingest":
-        asyncio.run(run())
-    elif args.stage == "chat":
-        if args.chat_interface == "cli":
-            asyncio.run(chat_cli())
-        elif args.chat_interface == "discord":
-            # Run the bot
-            asyncio.run(run())  # Note: using asyncio.run here
+async def main():
+    chat_interfaces = {"cli": chat_cli, "discord": run}
+    stages = {"ingest": run, "chat": chat_interfaces[args.chat_interface]}
+    await stages[args.stage]()
 
 
-main()
+asyncio.run(main())
