@@ -19,6 +19,12 @@ from halo import Halo
 import ast
 import requests
 
+
+# At the top, after imports and before class and function definitions
+TEMPERATURE = 0.2  # Default value
+TOP_P = 0.4  # Default value
+
+
 # Load environment variables
 load_dotenv()
 SYSTEM_PROMPT = os.environ.get("SYSTEM_PROMPT")
@@ -193,8 +199,15 @@ def count_message_tokens(messages):
     return token_count
 
 
-async def generate_response(messages, openai_api_key, temperature=0.2):
+async def generate_response(messages, openai_api_key, temperature=None, top_p=None):
+    global TEMPERATURE, TOP_P
     """Generates a response using OpenAI and ensures token limits are respected."""
+    temperature = temperature or TEMPERATURE
+    top_p = top_p or TOP_P
+
+    logging.debug(
+        f"generate_response received temperature: {temperature}, top_p: {top_p}"
+    )
 
     # Count the tokens of the initial messages
     initial_tokens = count_message_tokens(messages)
@@ -221,9 +234,9 @@ async def generate_response(messages, openai_api_key, temperature=0.2):
         response = openai.ChatCompletion.create(
             model=OA_model_name,
             messages=messages,
-            temperature=temperature,
+            temperature=TEMPERATURE,
             max_tokens=completion_tokens,
-            top_p=0.4,
+            top_p=TOP_P,
             frequency_penalty=0,
             presence_penalty=0,
         )
@@ -333,7 +346,7 @@ async def chat_cli():
 
                 # Generate response from OpenAI.
                 response, tokens_used = await generate_response(
-                    messages, OPENAI_API_KEY, temperature=0.2
+                    messages, OPENAI_API_KEY, temperature=Temperature
                 )
                 TOTAL_TOKENS_USED += tokens_used
 
@@ -351,7 +364,8 @@ intents = discord.Intents.default()
 intents.messages = True
 intents.reactions = True
 intents.guilds = True
-bot = commands.Bot(command_prefix="!", intents=intents)
+intents.message_content = True  # Add this line
+bot = commands.Bot(command_prefix="!!", intents=intents)
 
 
 class TokenCounter:
@@ -360,6 +374,45 @@ class TokenCounter:
 
     def add_tokens(self, tokens_used):
         self.total_tokens_used += tokens_used
+
+
+@bot.command()
+async def temp(ctx, temperature: float = None, top_p: float = None, *, query=None):
+    global TEMPERATURE, TOP_P
+
+    # If no arguments provided, return the current values
+    if temperature is None and top_p is None and query is None:
+        await ctx.send(f"🌡️= {TEMPERATURE}\n🎯 = {TOP_P}")
+        return
+
+    # Validate and update temperature
+    if temperature is not None:
+        if 0 <= temperature <= 1:
+            TEMPERATURE = temperature
+            await ctx.send(f"🌡️= {TEMPERATURE} ✅")
+        else:
+            await ctx.send("Invalid temperature. It should be between 0 and 1.")
+            return
+
+    # Validate and update top_p
+    if top_p is not None:
+        if 0 <= top_p <= 1:
+            TOP_P = top_p
+            await ctx.send(f"🎯= {TOP_P} ✅")
+        else:
+            await ctx.send("Invalid top_p. It should be between 0 and 1.")
+            return
+
+    # If a query is provided, process and send the response
+    if query:
+        response, tokens_used = await generate_response(
+            openai_api_key,
+            temperature=TEMPERATURE,
+            top_p=TOP_P,
+            messages=[{"role": "user", "content": query}],
+        )
+        await ctx.send("Processing your query...")
+        await ctx.send(response)
 
 
 async def process_user_message(message, is_reply, thread_id):
@@ -379,7 +432,8 @@ async def process_user_message(message, is_reply, thread_id):
         response, tokens_used = await generate_response(
             bot.conversation_history[thread_id],  # Include the conversation history
             openai_api_key,
-            temperature=0.2,
+            temperature=TEMPERATURE,
+            top_p=TOP_P,
         )
         logging.debug("Response generated")
         TOTAL_TOKENS_USED += tokens_used
@@ -422,6 +476,13 @@ async def on_message(message):
     if message.author.bot:
         return
     logging.debug(f"Received a message: {message.content}")
+
+    # Ignore commands (messages starting with the bot's prefix)
+    if message.content.startswith("!!temp"):
+        await bot.process_commands(message)
+        return
+    # Exit early to prevent further processing of command messages
+
     # Create a dictionary to store the conversation history for each thread
     if not hasattr(bot, "conversation_history"):
         bot.conversation_history = {}
