@@ -46,7 +46,7 @@ ptyprocess
 pycparser  
 pycryptodome  
 Pygments  
-pyproject_hooks0  
+pyproject_hooks  
 pyrsistent  
 python-dotenv  
 PyYAML  
