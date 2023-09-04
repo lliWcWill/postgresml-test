@@ -12,7 +12,7 @@ click==8.1.7
 colorama==0.4.6  
 crashtest==0.4.1  
 cryptography==41.0.3  
-discord.py==2.3.2  
+discord.py  
 distlib==0.3.7  
 dulwich==0.21.5  
 filelock==3.12.2  
@@ -34,10 +34,9 @@ mypy-extensions==1.0.0
 openai==0.27.9  
 packaging==23.1  
 pathspec==0.11.2  
-pdfminer==20191125  
-pdfminer.six==20221105  
+ 
 pexpect==4.8.0  
-pgml==0.9.0  
+pgml==0.9.1  
 pkginfo==1.9.6  
 platformdirs==3.10.0  
 poetry==1.6.1  
