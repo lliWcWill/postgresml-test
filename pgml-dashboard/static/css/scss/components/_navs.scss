@@ -133,18 +133,6 @@
     --bs-offcanvas-padding-x: 0;
 }
 
-.nav-tabs {
-
-    .nav-link {
-        @extend .btn, .btn-tertiary, .rounded-0;
-        border: none;
-
-        &.active {
-            border-bottom: var(--bs-nav-tabs-border-width) solid #{$purple};
-        }
-    }
-}
-
 .navbar-marketing-site {
     @extend .navbar;
 
@@ -192,18 +180,6 @@
 
     @include media-breakpoint-down(lg) {
         display: none;
-    }
-}
-
-.leftnav {
-    @extend .navbar;
-
-    border: none;
-    align-items: start;
-    background-color: inherit;
-
-    @include media-breakpoint-down(lg) {
-        background-color: #{$gray-900}
     }
 }
 
@@ -265,7 +241,7 @@
         color: #{$neon-shade-300};
     }
 
-    & button, & a {
+    button, a {
         padding: 8px 24px 8px 24px;
         color: #{$gray-100};
         width: 100%;

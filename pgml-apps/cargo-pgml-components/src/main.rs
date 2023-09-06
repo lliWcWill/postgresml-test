@@ -8,12 +8,20 @@ use std::path::Path;
 #[macro_use]
 extern crate log;
 
+mod backend;
+mod components;
 mod frontend;
 mod util;
 use util::{info, unwrap_or_exit};
 
 /// These paths are exepcted to exist in the project directory.
-static PROJECT_PATHS: &[&str] = &["src", "static/js", "static/css"];
+static PROJECT_PATHS: &[&str] = &[
+    "src",
+    "static/js",
+    "static/css",
+    "templates/components",
+    "src/components",
+];
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None, propagate_version = true, bin_name = "cargo", name = "cargo")]
@@ -68,7 +76,7 @@ fn main() {
                 Commands::Bundle {} => bundle(),
                 Commands::Add(command) => match command {
                     AddCommands::Component { name } => {
-                        crate::frontend::components::add(&name, pgml_commands.overwrite)
+                        crate::frontend::components::add(&Path::new(&name), pgml_commands.overwrite)
                     }
                 },
             }
@@ -98,6 +106,7 @@ fn validate_project(project_path: Option<String>) {
     }
 
     unwrap_or_exit!(set_current_dir(path));
+    components::install();
 }
 
 /// Bundle SASS and JavaScript into neat bundle files.

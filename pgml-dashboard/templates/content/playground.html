@@ -1,1 +1,62 @@
-<h3 class="h3">Playground</h3>
+<% use crate::components::*; %>
+
+<div class="min-height: 100vh;">
+  <h3 class="h3">Playground</h3>
+
+  <div class="mb-3">
+    <%+ GithubIcon::new() %>
+  </div>
+
+  <div class="mb-3">
+    <div class="row">
+      <div class="col-6" style="min-height: 400px;">
+        <%+ Dropdown::new(
+          vec![
+            StaticNavLink::new("Test".into(), "#test".into())
+          ]
+        ).collapsable()
+        .icon(ProfileIcon::new().into()) %>
+      </div>
+      <div class="col-6" style="min-height: 400px;">
+        <%+ Dropdown::new(
+          vec![
+            StaticNavLink::new("Test".into(), "#test".into())
+          ]
+        ).collapsable()
+        .text("Dropdown".into()) %>
+      </div>
+      <div class="col-2" style="min-height: 400px;">
+        <%+ Dropdown::new(
+          vec![
+            StaticNavLink::new("Really long title in the dropdown".into(), "#test".into()),
+            StaticNavLink::new("Normal link".into(), "#test".into())
+          ]
+        ).collapsable()
+        .text("Really long name in the dropdown".into()) %>
+      </div>
+    </div>
+  </div>
+  <div class="mb-3">
+    <%+ navigation::tabs::Tabs::new(&vec![
+        navigation::tabs::Tab::new(
+            "Test tab",
+            "Test content".into()
+        ),
+        navigation::tabs::Tab::new(
+            "Second tab",
+            "Second tab content".into()
+        ),
+        navigation::tabs::Tab::new(
+            "Third active tab",
+            "Hello third tab".into(),
+        ),
+    ]).active_tab("Third active tab") %>
+  </div>
+  <div class="mb-3">
+    <%+ tables::large::Table::new(&["Date", "Time", "Status"], &vec![
+        tables::large::Row::new(&["01/01/2022".into(), "20:00:43.956373 +00:00:00 UTC".into(), "Ready".into()]),
+        tables::large::Row::new(&["01/01/2022".into(), "20:00:43.956373 +00:00:00 UTC".into(), "Ready".into()]),
+        tables::large::Row::new(&["01/01/2022".into(), "20:00:43.956373 +00:00:00 UTC".into(), "Ready".into()]),
+    ]) %>
+  </div>
+</div>
