@@ -1,13 +1,23 @@
-<% use crate::components::*; %>
+<% use crate::components::*; 
+use crate::components::tables::large::*;
+use crate::components::navigation::tabs::*;
+use crate::components::inputs::range_group::RangeGroup;
+%>
 
-<div class="min-height: 100vh;">
-  <h3 class="h3">Playground</h3>
+<div class="min-height: 100vh;" data-controller="playground">
+  <h1 class="h1">Playground</h1>
+  <p>This is a space to display components.</p>
 
-  <div class="mb-3">
+  <h3 class="h3">icons</h3>
+  <div class="mb-5">
     <%+ GithubIcon::new() %>
   </div>
-
   <div class="mb-3">
+    <%+ ProfileIcon %>
+  </div>
+
+  <h3 class="h3">Dropdowns</h3>
+  <div class="mb-5">
     <div class="row">
       <div class="col-6" style="min-height: 400px;">
         <%+ Dropdown::new(
@@ -36,27 +46,75 @@
       </div>
     </div>
   </div>
-  <div class="mb-3">
-    <%+ navigation::tabs::Tabs::new(&vec![
-        navigation::tabs::Tab::new(
-            "Test tab",
-            "Test content".into()
-        ),
-        navigation::tabs::Tab::new(
-            "Second tab",
-            "Second tab content".into()
-        ),
-        navigation::tabs::Tab::new(
-            "Third active tab",
-            "Hello third tab".into(),
-        ),
-    ]).active_tab("Third active tab") %>
+
+
+  <h3 class="h3">Navigation</h3>
+  <div class="mb-5">
+    <%+ Tabs::new(
+        &[
+            Tab::new(
+                "Test tab",
+                Table::new(
+                    &["Date", "Time", "Status"],
+                    &[
+                        Row::new(&[
+                            "01/01/2022".into(),
+                            "20:00:43.956373 +00:00:00 UTC".into(),
+                            "Ready".into()
+                        ])
+                        .action("click->playground#selectRow")
+                        .data("row-id", "1"),
+                        
+                        Row::new(&[
+                            "01/01/2022".into(),
+                            "20:00:43.956373 +00:00:00 UTC".into(), "Ready".into()
+                        ])
+                        .action("click->playground#selectRow")
+                        .data("row-id", "2"),
+
+                        Row::new(&[
+                            "01/01/2022".into(),
+                            "20:00:43.956373 +00:00:00 UTC".into(), "Ready".into()
+                        ])
+                        .action("click->playground#selectRow")
+                        .data("row-id", "3"),
+
+                    ])
+                    .selectable()
+                    .into()
+            ),
+            Tab::new(
+                "Second tab",
+                "Second tab content".into()
+            ),
+            Tab::new(
+                "Third active tab",
+                "Hello third tab".into(),
+            ),
+        ]
+    )
+    .active_tab("Test tab") %>
   </div>
-  <div class="mb-3">
-    <%+ tables::large::Table::new(&["Date", "Time", "Status"], &vec![
-        tables::large::Row::new(&["01/01/2022".into(), "20:00:43.956373 +00:00:00 UTC".into(), "Ready".into()]),
-        tables::large::Row::new(&["01/01/2022".into(), "20:00:43.956373 +00:00:00 UTC".into(), "Ready".into()]),
-        tables::large::Row::new(&["01/01/2022".into(), "20:00:43.956373 +00:00:00 UTC".into(), "Ready".into()]),
-    ]) %>
+
+  <h3 class="h3">Inputs</h3>
+  <div style="background: #17181A; padding: 2rem; border-radius: 16px;">
+    <div class="mb-5">
+      <div class="my-5">
+        <%+ RangeGroup::new("Input 1")
+          .initial_value(4.0)
+          .identifier("my_test_input")
+          .bounds(2, 38, 2.0)
+          .units("T") %>
+      </div>
+
+      <div class="my-5">
+        <%+ RangeGroup::new("Input 2: with hourly rate")
+        .initial_value(3.0)
+        .identifier("my_test input 2")
+        .bounds(1, 20, 1.0)
+        .units("GB")
+        .cost_rate(0.144) %>
+      </div>
+    </div>
   </div>
 </div>

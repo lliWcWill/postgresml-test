@@ -1,5 +1,5 @@
-use crate::components::component;
 use crate::components::tables::large::Row;
+use pgml_components::component;
 use sailfish::TemplateOnce;
 
 #[derive(TemplateOnce, Default)]
@@ -7,6 +7,7 @@ use sailfish::TemplateOnce;
 pub struct Table {
     rows: Vec<Row>,
     headers: Vec<String>,
+    classes: String,
 }
 
 impl Table {
@@ -14,7 +15,13 @@ impl Table {
         Table {
             headers: headers.iter().map(|h| h.to_string()).collect(),
             rows: rows.to_vec(),
+            classes: "table table-lg".to_string(),
         }
+    }
+
+    pub fn selectable(mut self) -> Self {
+        self.classes.push_str(" selectable");
+        self
     }
 }
 
