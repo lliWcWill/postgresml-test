@@ -317,6 +317,7 @@ async def get_prompt(user_input: str = ""):
 
 
 async def chat_cli():
+    global TEMPERATURE
     global TOTAL_TOKENS_USED
     print("Welcome to IT Solutions Bot! How can I assist you today?")
     while True:
@@ -346,7 +347,7 @@ async def chat_cli():
 
                 # Generate response from OpenAI.
                 response, tokens_used = await generate_response(
-                    messages, OPENAI_API_KEY, temperature=Temperature
+                    messages, OPENAI_API_KEY, temperature=TEMPERATURE
                 )
                 TOTAL_TOKENS_USED += tokens_used
 
@@ -374,6 +375,64 @@ class TokenCounter:
 
     def add_tokens(self, tokens_used):
         self.total_tokens_used += tokens_used
+
+
+import time
+
+
+class RateLimit:
+    def __init__(self, limit, remaining, reset):
+        self.limit = limit
+        self.remaining = remaining
+        self.reset = reset
+
+
+ratelimits = {}
+global_limit = 50000
+global_remaining = global_limit
+
+
+@bot.event
+async def on_ready():
+    global global_remaining
+    global_remaining = global_limit
+
+    ratelimits = {}
+
+
+@bot.event
+async def on_message(message):
+    try:
+        response = await make_api_call()
+
+    except Exception as e:
+        if e.status == 429:
+            ratelimit = ratelimits[response.url]
+            wait = ratelimit.reset - time.time()
+            if wait > 0:
+                await asyncio.sleep(wait)
+            response = await make_api_call()
+        else:
+            raise e
+
+    # Update rate limits
+    limit = int(response.headers["X-RateLimit-Limit"])
+    remaining = int(response.headers["X-RateLimit-Remaining"])
+    reset = int(response.headers["X-RateLimit-Reset"])
+
+    ratelimit = RateLimit(limit, remaining, reset)
+    ratelimits[response.url] = ratelimit
+
+    global_remaining -= 1
+
+    if ratelimit.remaining < 10:
+        await asyncio.sleep(1)
+
+    if global_remaining < 100:
+        await asyncio.sleep(1)
+
+    if ratelimit.remaining == 0 or global_remaining == 0:
+        await asyncio.sleep(ratelimit.reset - time.time())
 
 
 @bot.command()
