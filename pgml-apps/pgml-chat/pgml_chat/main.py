@@ -186,9 +186,9 @@ async def ingest_documents(folder: str):
 # Initialize the tokenizer and encoder for GPT-4
 enc = encoding_for_model("gpt-4")
 
-INITIAL_TOKEN_LIMIT = 6000
-MAX_RESPONSE_TOKENS = 8000
-MAX_TOKEN_LIMIT = 8160
+INITIAL_TOKEN_LIMIT = 6500
+MAX_RESPONSE_TOKENS = 7000
+MAX_TOKEN_LIMIT = 8140
 
 
 def count_message_tokens(messages):
