@@ -22,7 +22,7 @@ import requests
 
 # At the top, after imports and before class and function definitions
 TEMPERATURE = 0.2  # Default value
-TOP_P = 0.4  # Default value
+TOP_P = 0.5  # Default value
 
 
 # Load environment variables
@@ -31,7 +31,7 @@ SYSTEM_PROMPT = os.environ.get("SYSTEM_PROMPT")
 BASE_PROMPT = os.getenv("BASE_PROMPT")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
-OA_model_name = "gpt-3.5-turbo-16k-0613"
+OA_model_name = "gpt-4-0314"
 TOTAL_TOKENS_USED = 0
 
 
@@ -186,9 +186,9 @@ async def ingest_documents(folder: str):
 # Initialize the tokenizer and encoder for GPT-4
 enc = encoding_for_model("gpt-4")
 
-INITIAL_TOKEN_LIMIT = 14500
-MAX_RESPONSE_TOKENS = 15500
-MAX_TOKEN_LIMIT = 16000
+INITIAL_TOKEN_LIMIT = 6000
+MAX_RESPONSE_TOKENS = 8000
+MAX_TOKEN_LIMIT = 8160
 
 
 def count_message_tokens(messages):
