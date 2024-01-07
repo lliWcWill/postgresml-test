@@ -10,6 +10,7 @@ from pgml import (
     OpenSourceAI,
 )
 import logging
+import threading
 from rich.logging import RichHandler
 from rich.progress import track
 from rich import print
@@ -22,6 +23,13 @@ from openai import OpenAI
 import signal
 from uuid import uuid4
 import pendulum
+from colorama import Fore, Style, init
+from datetime import datetime
+import readchar
+import requests
+import sounddevice as sd
+import speech_recognition as sr
+import wavio
 
 import ast
 from slack_bolt.async_app import AsyncApp
@@ -35,6 +43,20 @@ def handler(signum, frame):
     print("Exiting...")
     exit(0)
 
+
+init(autoreset=True)
+logging.basicConfig(level=logging.INFO, format="%(message)s")
+logger = logging.getLogger(__name__)
+
+# Global variable to control the recording state
+is_recording = False
+
+# Constants for recording
+WAVE_OUTPUT_FILENAME = "temp_audio.wav"
+CHANNELS = 1
+SAMPLE_WIDTH = 2
+RATE = 16000
+FORMAT = "int16"
 
 signal.signal(signal.SIGINT, handler)
 
@@ -95,7 +117,9 @@ parser.add_argument(
     default="English",
     help="Language of the bot",
 )
-
+parser.add_argument(
+    "-v", "--voice", action="store_true", help="Enable voice input mode"
+)
 parser.add_argument(
     "--bot_topic",
     dest="bot_topic",
@@ -254,6 +278,141 @@ system_prompt_document = [
         "timestamp": pendulum.now().timestamp(),
     }
 ]
+
+
+def voice_to_text():
+    """
+    Transcribes voice from recorded audio data.
+    """
+    global audio_frames
+    # Save the recorded audio data to a WAV file
+    wavio.write(WAVE_OUTPUT_FILENAME, audio_frames, RATE, sampwidth=SAMPLE_WIDTH)
+
+    # Transcribe the saved audio file
+    with open(WAVE_OUTPUT_FILENAME, "rb") as f:
+        transcript = client.audio.transcriptions.create(model="whisper-1", file=f)
+        return transcript.text
+
+
+# Global variable to store audio frames
+audio_frames = []
+
+import subprocess
+
+
+def create_session_folder():
+    session_folder = f"Collections/session_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+    os.makedirs(session_folder, exist_ok=True)
+    return session_folder
+
+
+def save_transcription(folder, original, translated):
+    with open(os.path.join(folder, "transcriptions.txt"), "a") as file:
+        file.write(f"Original: {original}\nTranslated: {translated}\n\n")
+
+
+def play_audio(audio_content):
+    """
+    Play the given audio content using ffplay.
+
+    Args:
+        audio_content (bytes): The audio content to be played.
+
+    Raises:
+        Exception: If there is an error playing the audio with ffplay.
+
+    Returns:
+        None
+    """
+    try:
+        # Start a subprocess that runs ffplay
+        ffplay_proc = subprocess.Popen(
+            ["ffplay", "-nodisp", "-autoexit", "-"],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.STDOUT,
+        )
+
+        # Write the audio content to ffplay's stdin
+        ffplay_proc.stdin.write(audio_content)
+        ffplay_proc.stdin.flush()
+
+        # Close the stdin and wait for ffplay to finish playing the audio
+        ffplay_proc.stdin.close()
+        ffplay_proc.wait()
+    except Exception as e:
+        logger.error(Fore.RED + f"Error playing audio with ffplay: {e}\n")
+
+
+def voice_stream(input_text, chosen_voice):
+    """
+    Generate the voice stream for the given input text and chosen voice.
+
+    Parameters:
+        input_text (str): The text to be converted into speech.
+        chosen_voice (str): The voice to be used for the speech conversion.
+
+    Returns:
+        None
+    """
+    try:
+        response = client.audio.speech.create(
+            model="tts-1", voice=chosen_voice, input=input_text
+        )
+
+        # Play the audio
+        play_audio(response.content)  # Implement play_audio to play the actual audio
+    except Exception as e:
+        logger.error(Fore.RED + f"Failed to speak text: {e}\n")
+
+
+# Record Audio Function with Duration Parameter
+def record_audio(duration=20):  # Default duration set to 20 seconds
+    """
+    Records audio for a specified duration and saves it as a WAV file.
+    ...
+    """
+    filename = f"audio_record_{datetime.now().strftime('%Y%m%d_%H%M%S')}.wav"
+    print(Fore.GREEN + f"\nRecording for {duration} seconds...\n" + Style.RESET_ALL)
+    audio_data = sd.rec(
+        int(duration * RATE), samplerate=RATE, channels=CHANNELS, dtype=FORMAT
+    )
+    sd.wait()  # Wait until the recording is finished
+    wavio.write(filename, audio_data, RATE, sampwidth=SAMPLE_WIDTH)
+    logger.info(Fore.GREEN + f"Confirmed Audio Saved!\n")
+    return filename
+
+
+# Transcribe Audio Function with Corrected Handling
+def transcribe_audio(audio_file_path):
+    """
+    Transcribes an audio file using the specified audio file path.
+
+    Parameters:
+        audio_file_path (str): The path to the audio file.
+
+    Returns:
+        str: The transcription text if successful, None otherwise.
+    """
+    try:
+        with open(audio_file_path, "rb") as audio_file:
+            response = client.audio.transcriptions.create(
+                model="whisper-1",
+                file=audio_file,
+                prompt="Please focus solely on transcribing the content of this audio. Do not translate. Maintain the original language and context as accurately as possible.",
+            )
+
+            logger.info(f"Full API Response: {response}\n")
+
+            # Check for transcription text
+            if hasattr(response, "text") and response.text:
+                return response.text
+            else:
+                logger.error(Fore.RED + "No transcription data found in the response\n")
+                return None
+    except Exception as e:
+        logger.error(Fore.RED + f"Transcription failed due to an error: {e}\n")
+        return None
 
 
 def get_model_type(chat_completion_model: str):
@@ -458,17 +617,55 @@ async def chat_cli():
     user_name = os.environ.get("USER")
     while True:
         try:
-            user_input = input(f"{bot_name} (Ctrl-C to exit): ")
-            response = await generate_chat_response(
-                user_input,
-                system_prompt,
-                openai_api_key,
-                max_tokens=max_tokens,
-                temperature=temperature,
-                top_p=0.9,
-                user_name=user_name,
-            )
-            print(f"{bot_name}: " + response)
+            if args.voice:
+                print("Voice input mode activated. Press 'r' to record, 'q' to quit.")
+                user_input_key = input("Your choice: ")
+                if user_input_key.lower() == "r":
+                    # Start recording in a separate thread
+                    record_thread = threading.Thread(target=record_audio, args=(20,))
+                    record_thread.start()
+                    record_thread.join()  # Wait for the recording to complete
+
+                    # Transcribe the recorded audio
+                    transcription = transcribe_audio(WAVE_OUTPUT_FILENAME)
+                    print("Transcribed Text: ", transcription)
+
+                    # Generate chat response using the transcribed text
+                    response = await generate_chat_response(
+                        transcription,
+                        system_prompt,
+                        openai_api_key,
+                        max_tokens=max_tokens,
+                        temperature=temperature,
+                        top_p=0.9,
+                        user_name=user_name,
+                    )
+                    print(f"{bot_name}: " + response)
+
+                    # Convert the chatbot's response to speech and play it
+                    chosen_voice = (
+                        "your_preferred_voice"  # Set your preferred voice model
+                    )
+                    voice_stream(response, chosen_voice)
+
+                elif user_input_key.lower() == "q":
+                    print("Exiting voice input mode...")
+                    break
+                else:
+                    print("Invalid input. Press 'r' to record, 'q' to quit.")
+            else:
+                # Existing text input mode
+                user_input = input(f"{bot_name} (Ctrl-C to exit): ")
+                response = await generate_chat_response(
+                    user_input,
+                    system_prompt,
+                    openai_api_key,
+                    max_tokens=max_tokens,
+                    temperature=temperature,
+                    top_p=0.9,
+                    user_name=user_name,
+                )
+                print(f"{bot_name}: " + response)
         except KeyboardInterrupt:
             print("Exiting...")
             break
