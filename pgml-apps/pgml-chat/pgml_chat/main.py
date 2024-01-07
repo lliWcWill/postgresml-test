@@ -84,7 +84,7 @@ parser.add_argument(
     "--bot_name",
     dest="bot_name",
     type=str,
-    default="PgBot",
+    default="FDBot",
     help="Name of the bot",
 )
 
@@ -100,7 +100,7 @@ parser.add_argument(
     "--bot_topic",
     dest="bot_topic",
     type=str,
-    default="PostgresML",
+    default="Technology",
     help="Topic of the bot",
 )
 parser.add_argument(
@@ -115,7 +115,7 @@ parser.add_argument(
     "--bot_persona",
     dest="bot_persona",
     type=str,
-    default="Engineer",
+    default="Research Assistant",
     help="Persona of the bot",
 )
 
@@ -123,14 +123,14 @@ parser.add_argument(
     "--chat_completion_model",
     dest="chat_completion_model",
     type=str,
-    default="HuggingFaceH4/zephyr-7b-beta",
+    default="gpt-4-1106-preview",
 )
 
 parser.add_argument(
     "--max_tokens",
     dest="max_tokens",
     type=int,
-    default=256,
+    default=2789,
     help="Maximum number of tokens to generate",
 )
 
@@ -216,11 +216,11 @@ query_params_instruction = (
 query_params = {"instruction": query_params_instruction}
 
 default_system_prompt_template = """Use the following pieces of context to answer the question at the end.
-If you don't know the answer, just say that you don't know, don't try to make up an answer.
-Use three sentences maximum and keep the answer as concise as possible.
-Always say "thanks for asking!" at the end of the answer."""
+If you don't know the answer, just say that you don't know, don't try to make up an anything"""
 
-system_prompt_template = os.environ.get("SYSTEM_PROMPT_TEMPLATE", default_system_prompt_template)
+system_prompt_template = os.environ.get(
+    "SYSTEM_PROMPT_TEMPLATE", default_system_prompt_template
+)
 
 system_prompt = system_prompt_template.format(
     topic=bot_topic,
@@ -243,7 +243,7 @@ User: {question}
 Helpful Answer:"""
 
 
-openai_api_key = os.environ.get("OPENAI_API_KEY","")
+openai_api_key = os.environ.get("OPENAI_API_KEY", "")
 
 system_prompt_document = [
     {
@@ -257,19 +257,21 @@ system_prompt_document = [
 
 
 def get_model_type(chat_completion_model: str):
-    model_type = "opensourceai"
+    # Default model type to 'openai'
+    model_type = "openai"
+
     try:
         client = OpenAI(api_key=openai_api_key)
         models = client.models.list()
-        for model in models:
-            if model.id == chat_completion_model:
-                model_type = "openai"
-                break
+        # Check if the specified model is in the list of OpenAI models
+        if not any(model.id == chat_completion_model for model in models):
+            model_type = "opensourceai"
     except Exception as e:
         log.debug(e)
+        # If there is an exception, assume 'opensourceai'
+        model_type = "opensourceai"
 
     log.info("Setting model type to " + model_type)
-
     return model_type
 
 
@@ -283,7 +285,7 @@ async def upsert_documents(folder: str) -> int:
     log.info("Found " + str(len(md_files)) + " markdown files")
     documents = []
     for md_file in track(md_files, description="Extracting text from markdown"):
-        with open(md_file, "r") as f:
+        with open(md_file, "r", encoding="utf-8", errors="replace") as f:
             documents.append({"text": f.read(), "id": md_file})
 
     log.info("Upserting documents into database")
@@ -298,7 +300,7 @@ async def generate_chat_response(
     openai_api_key,
     temperature=temperature,
     max_tokens=max_tokens,
-    top_p=0.9,
+    top_p=0.4,
     user_name="",
 ):
     messages = []
@@ -350,7 +352,6 @@ async def generate_chat_response(
         "user_name": user_name,
     }
     history_documents.append(_document)
-
 
     query = await get_prompt(user_input, conversation_history)
 
@@ -457,7 +458,7 @@ async def chat_cli():
     user_name = os.environ.get("USER")
     while True:
         try:
-            user_input = input("User (Ctrl-C to exit): ")
+            user_input = input(f"{bot_name} (Ctrl-C to exit): ")
             response = await generate_chat_response(
                 user_input,
                 system_prompt,
@@ -467,7 +468,7 @@ async def chat_cli():
                 top_p=0.9,
                 user_name=user_name,
             )
-            print("PgBot: " + response)
+            print(f"{bot_name}: " + response)
         except KeyboardInterrupt:
             print("Exiting...")
             break
