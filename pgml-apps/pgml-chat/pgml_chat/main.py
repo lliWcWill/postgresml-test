@@ -11,6 +11,7 @@ from pgml import (
 )
 import logging
 import threading
+from threading import Event
 from rich.logging import RichHandler
 from rich.progress import track
 from rich import print
@@ -19,23 +20,31 @@ from dotenv import load_dotenv
 import glob
 import argparse
 from time import time
-from openai import OpenAI
 import signal
 from uuid import uuid4
 import pendulum
-from colorama import Fore, Style, init
+import argparse
+import logging
+import yaml
+import subprocess
+import sys
 from datetime import datetime
+
 import readchar
 import requests
 import sounddevice as sd
 import speech_recognition as sr
 import wavio
 
+
+from pynput import keyboard
+import openai
+
 import ast
 from slack_bolt.async_app import AsyncApp
 from slack_bolt.adapter.socket_mode.aiohttp import AsyncSocketModeHandler
 import requests
-
+from colorama import Fore, Style, init
 import discord
 
 
@@ -117,9 +126,17 @@ parser.add_argument(
     default="English",
     help="Language of the bot",
 )
+# Define the available voice choices
+voice_choices = ["alloy", "echo", "fable", "onyx", "nova", "shimmer"]
+
 parser.add_argument(
-    "-v", "--voice", action="store_true", help="Enable voice input mode"
+    "-v",
+    "--voice",
+    choices=voice_choices,
+    default="onyx",  # Default voice model
+    help="Choose a TTS voice for speaking back the response.",
 )
+
 parser.add_argument(
     "--bot_topic",
     dest="bot_topic",
@@ -183,14 +200,16 @@ parser.add_argument(
 
 args = parser.parse_args()
 
-FORMAT = "%(message)s"
+# For logging
+LOG_FORMAT = "%(message)s"
 logging.basicConfig(
     level=os.environ.get("LOG_LEVEL", "ERROR"),
-    format="%(asctime)s - %(message)s",
+    format="%(asctime)s - " + LOG_FORMAT,
     datefmt="[%X]",
     handlers=[RichHandler()],
 )
 log = logging.getLogger("rich")
+
 
 # Load .env file
 load_dotenv(".env")
@@ -267,7 +286,7 @@ User: {question}
 Helpful Answer:"""
 
 
-openai_api_key = os.environ.get("OPENAI_API_KEY", "")
+# openai_api_key = os.environ.get("OPENAI_API_KEY", "")
 
 system_prompt_document = [
     {
@@ -279,36 +298,8 @@ system_prompt_document = [
     }
 ]
 
-
-def voice_to_text():
-    """
-    Transcribes voice from recorded audio data.
-    """
-    global audio_frames
-    # Save the recorded audio data to a WAV file
-    wavio.write(WAVE_OUTPUT_FILENAME, audio_frames, RATE, sampwidth=SAMPLE_WIDTH)
-
-    # Transcribe the saved audio file
-    with open(WAVE_OUTPUT_FILENAME, "rb") as f:
-        transcript = client.audio.transcriptions.create(model="whisper-1", file=f)
-        return transcript.text
-
-
 # Global variable to store audio frames
 audio_frames = []
-
-import subprocess
-
-
-def create_session_folder():
-    session_folder = f"Collections/session_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-    os.makedirs(session_folder, exist_ok=True)
-    return session_folder
-
-
-def save_transcription(folder, original, translated):
-    with open(os.path.join(folder, "transcriptions.txt"), "a") as file:
-        file.write(f"Original: {original}\nTranslated: {translated}\n\n")
 
 
 def play_audio(audio_content):
@@ -356,7 +347,7 @@ def voice_stream(input_text, chosen_voice):
         None
     """
     try:
-        response = client.audio.speech.create(
+        response = openai.audio.speech.create(
             model="tts-1", voice=chosen_voice, input=input_text
         )
 
@@ -366,21 +357,97 @@ def voice_stream(input_text, chosen_voice):
         logger.error(Fore.RED + f"Failed to speak text: {e}\n")
 
 
-# Record Audio Function with Duration Parameter
-def record_audio(duration=20):  # Default duration set to 20 seconds
-    """
-    Records audio for a specified duration and saves it as a WAV file.
-    ...
-    """
+def play_welcome_message(voice):
+    welcome_text = "Welcome to the chatbot. Press the space bar to speak."
+    voice_stream(welcome_text, voice)
+
+
+def create_session_folder():
+    session_folder = f"Collections/session_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+    os.makedirs(session_folder, exist_ok=True)
+    return session_folder
+
+
+def save_transcription(folder, original, translated):
+    with open(os.path.join(folder, "transcriptions.txt"), "a") as file:
+        file.write(f"Original: {original}\nTranslated: {translated}\n\n")
+
+
+def check_for_spacebar():
+    global is_recording
+    while is_recording:
+        key = readchar.readkey()
+        if key == " ":
+            is_recording = False
+            break
+
+
+def record_audio(duration=10):  # Default duration set to 10 seconds
+    global is_recording
     filename = f"audio_record_{datetime.now().strftime('%Y%m%d_%H%M%S')}.wav"
-    print(Fore.GREEN + f"\nRecording for {duration} seconds...\n" + Style.RESET_ALL)
+    print(
+        Fore.GREEN
+        + f"\nRecording for up to {duration} seconds... Press space to stop early.\n"
+        + Style.RESET_ALL
+    )
+
+    is_recording = True
     audio_data = sd.rec(
         int(duration * RATE), samplerate=RATE, channels=CHANNELS, dtype=FORMAT
     )
-    sd.wait()  # Wait until the recording is finished
+
+    # Start a new thread to listen for spacebar presses
+    stop_thread = threading.Thread(target=check_for_spacebar)
+    stop_thread.start()
+
+    while is_recording:
+        sd.sleep(100)  # Check every 100 ms
+
+    # Stop the recording
+    sd.stop()
+
+    # Save the recorded audio
     wavio.write(filename, audio_data, RATE, sampwidth=SAMPLE_WIDTH)
-    logger.info(Fore.GREEN + f"Confirmed Audio Saved!\n")
+    logger.info(Fore.GREEN + f"Audio Saved: {filename}\n")
     return filename
+
+
+def record_callback(indata, frames, time, status):
+    """
+    Record a callback function that appends the input audio frames to `audio_frames`
+    if `is_recording` is True. Print the input `status` to the standard error stream
+    if it is not None.
+
+    Parameters:
+    - `indata`: The input audio frames.
+    - `frames`: The number of frames.
+    - `time`: The time.
+    - `status`: The status.
+
+    Returns:
+    This function does not return anything.
+    """
+
+    global is_recording, audio_frames
+    if is_recording:
+        audio_frames.append(indata.copy())
+    if status:
+        print(status, file=sys.stderr)
+
+
+def load_config():
+    """
+    Loads the configuration from the "config.yaml" file and returns it.
+
+    Returns:
+        The configuration loaded from the "config.yaml" file.
+    """
+    with open("config.yaml", "r") as file:
+        return yaml.safe_load(file)
+
+
+config = load_config()
+openai_api_key = config["openai"]["api_key"]
 
 
 # Transcribe Audio Function with Corrected Handling
@@ -396,7 +463,7 @@ def transcribe_audio(audio_file_path):
     """
     try:
         with open(audio_file_path, "rb") as audio_file:
-            response = client.audio.transcriptions.create(
+            response = openai.audio.transcriptions.create(
                 model="whisper-1",
                 file=audio_file,
                 prompt="Please focus solely on transcribing the content of this audio. Do not translate. Maintain the original language and context as accurately as possible.",
@@ -415,13 +482,26 @@ def transcribe_audio(audio_file_path):
         return None
 
 
+def voice_to_text():
+    """
+    Transcribes voice from recorded audio data.
+    """
+    global audio_frames
+    # Save the recorded audio data to a WAV file
+    wavio.write(WAVE_OUTPUT_FILENAME, audio_frames, RATE, sampwidth=SAMPLE_WIDTH)
+
+    # Transcribe the saved audio file
+    with open(WAVE_OUTPUT_FILENAME, "rb") as f:
+        transcript = openai.audio.transcriptions.create(model="whisper-1", file=f)
+        return transcript.text
+
+
 def get_model_type(chat_completion_model: str):
     # Default model type to 'openai'
     model_type = "openai"
 
     try:
-        client = OpenAI(api_key=openai_api_key)
-        models = client.models.list()
+        models = openai.models.list()
         # Check if the specified model is in the list of OpenAI models
         if not any(model.id == chat_completion_model for model in models):
             model_type = "opensourceai"
@@ -547,9 +627,8 @@ async def generate_response(
 ):
     model_type = get_model_type(chat_completion_model)
     if model_type == "openai":
-        client = OpenAI(api_key=openai_api_key)
         log.debug("Generating response from OpenAI API: " + str(messages))
-        response = client.chat.completions.create(
+        response = openai.chat.completions.create(
             model=chat_completion_model,
             messages=messages,
             temperature=temperature,
@@ -615,46 +694,47 @@ async def get_prompt(user_input: str = "", conversation_history: str = "") -> st
 
 async def chat_cli():
     user_name = os.environ.get("USER")
-    while True:
-        try:
+    audio_files = []  # Keep track of recorded audio files for cleanup
+
+    try:
+        while True:
             if args.voice:
-                print("Voice input mode activated. Press 'r' to record, 'q' to quit.")
-                user_input_key = input("Your choice: ")
-                if user_input_key.lower() == "r":
-                    # Start recording in a separate thread
-                    record_thread = threading.Thread(target=record_audio, args=(20,))
-                    record_thread.start()
-                    record_thread.join()  # Wait for the recording to complete
+                print("Press 'space' to record, 'q' to quit.")
+                user_input_key = readchar.readkey()
+
+                if user_input_key == " ":
+                    # Record audio and get the filename
+                    audio_file_path = record_audio(10)  # Record for 10 seconds
+                    audio_files.append(audio_file_path)  # Add to cleanup list
 
                     # Transcribe the recorded audio
-                    transcription = transcribe_audio(WAVE_OUTPUT_FILENAME)
+                    transcription = transcribe_audio(audio_file_path)
                     print("Transcribed Text: ", transcription)
 
-                    # Generate chat response using the transcribed text
-                    response = await generate_chat_response(
-                        transcription,
-                        system_prompt,
-                        openai_api_key,
-                        max_tokens=max_tokens,
-                        temperature=temperature,
-                        top_p=0.9,
-                        user_name=user_name,
-                    )
-                    print(f"{bot_name}: " + response)
+                    if transcription:
+                        # Generate and display chat response using the transcribed text
+                        response = await generate_chat_response(
+                            transcription,
+                            system_prompt,
+                            openai_api_key,
+                            max_tokens=max_tokens,
+                            temperature=temperature,
+                            top_p=0.9,
+                            user_name=user_name,
+                        )
+                        print(f"{bot_name}: " + response)
 
-                    # Convert the chatbot's response to speech and play it
-                    chosen_voice = (
-                        "your_preferred_voice"  # Set your preferred voice model
-                    )
-                    voice_stream(response, chosen_voice)
+                        # Convert the chatbot's response to speech using the selected voice
+                        voice_stream(response, args.voice)
+                    else:
+                        print("No transcription available.")
 
                 elif user_input_key.lower() == "q":
                     print("Exiting voice input mode...")
                     break
-                else:
-                    print("Invalid input. Press 'r' to record, 'q' to quit.")
+
             else:
-                # Existing text input mode
+                # Text input mode
                 user_input = input(f"{bot_name} (Ctrl-C to exit): ")
                 response = await generate_chat_response(
                     user_input,
@@ -666,9 +746,50 @@ async def chat_cli():
                     user_name=user_name,
                 )
                 print(f"{bot_name}: " + response)
-        except KeyboardInterrupt:
-            print("Exiting...")
-            break
+
+    except KeyboardInterrupt:
+        print("Exiting...")
+
+    finally:
+        # Cleanup routine for audio files
+        cleanup_audio_files(audio_files)
+
+
+def cleanup_audio_files(audio_files):
+    print(
+        Fore.YELLOW
+        + "\nDo you want to "
+        + Fore.RED
+        + "delete all"
+        + Fore.YELLOW
+        + " audio files saved during this session?"
+        + Style.RESET_ALL
+    )
+    print(
+        Fore.YELLOW
+        + "Press the "
+        + Fore.MAGENTA
+        + "S P A C E B A R"
+        + Fore.YELLOW
+        + " to delete all or press "
+        + Fore.GREEN
+        + "E N T E R"
+        + Fore.YELLOW
+        + " to save and exit."
+        + Style.RESET_ALL
+    )
+    try:
+        user_input = readchar.readkey()
+        if user_input == " ":
+            for file_path in audio_files:
+                os.remove(file_path)
+            print(Fore.GREEN + "All audio files have been deleted." + Style.RESET_ALL)
+        else:
+            print(
+                Fore.GREEN + "Exiting without deleting audio files." + Style.RESET_ALL
+            )
+    except Exception as e:
+        print(Fore.RED + f"An error occurred: {e}" + Style.RESET_ALL)
 
 
 async def chat_slack():
@@ -753,6 +874,10 @@ async def run():
 
 def main():
     init_logger()
+    # Check if voice mode is enabled and play welcome message
+    if args.voice:
+        play_welcome_message(args.voice)
+
     if (
         stage == "chat"
         and chat_interface == "discord"
